@@ -32,10 +32,21 @@ export const createRandomStreams = (seed) => Object.fromEntries(
     [name, createRandomGenerator((Number(seed) ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0)]),
 );
 
-export const createExperimentalInputs = (nodeConfigs, seed) => ({
-  nodeConfigs: nodeConfigs.map((node) => ({ ...node })),
-  seed,
-});
+export const createExperimentalInputs = (nodeConfigs, seed, { heterogeneity = 0 } = {}) => {
+  if (!Number.isFinite(heterogeneity) || heterogeneity < 0 || heterogeneity > 1) {
+    throw new Error('Heterogeneity must be between 0 and 1');
+  }
+  const random = createRandomStreams(seed).bandwidth;
+  return {
+    nodeConfigs: nodeConfigs.map((node) => ({
+      ...node,
+      uploadMultiplier: node.role === 'seed' ? 1 : 1 - heterogeneity + 2 * heterogeneity * random(),
+      downloadMultiplier: 1,
+    })),
+    seed,
+    heterogeneity,
+  };
+};
 
 const makeNetwork = (nodeConfigs, fileSizeMB) => {
   const nodeCount = nodeConfigs.length;
@@ -365,6 +376,7 @@ export const runExperiment = ({
   regularSlots,
   optimisticSlots,
   seed,
+  heterogeneity = 0,
   stepSeconds = 0.1,
   selectionIntervalSeconds = 10,
   contributionWindowSeconds = 20,
@@ -381,7 +393,7 @@ export const runExperiment = ({
   const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
-  const inputs = createExperimentalInputs(nodeConfigs, seed);
+  const inputs = createExperimentalInputs(nodeConfigs, seed, { heterogeneity });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
