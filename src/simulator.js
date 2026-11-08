@@ -397,6 +397,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       }
     }
     history[historyIndex] = transfers;
+    if (completedCount === peerCount) break;
   }
 
   const finishedTimes = [];
@@ -436,6 +437,13 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
     meanFinishMinutes:
       finishedTimes.length === 0 ? null : totalFinishTime / finishedTimes.length,
     finishedTimesCount: finishedTimes.length,
+    completionTimesSeconds: network.peerIds.map((id) => finishTimes[id] === null ? null : finishTimes[id] * 60),
+    completionFraction: finishedTimes.length / peerCount,
+    swarmFinishSeconds: lastFinishMinutes === null ? null : lastFinishMinutes * 60,
+    meanAllPeersFinishSeconds: finishedTimes.length === peerCount ? totalFinishTime * 60 / peerCount : null,
+    elapsedSeconds: times.at(-1) * 60,
+    termination: finishedTimes.length === peerCount ? 'complete' : 'deadline',
+    downloadedMB: network.peerIds.map((id) => piecesByPeer[id].reduce((sum, mb) => sum + mb, 0)),
   };
 };
 
@@ -458,6 +466,12 @@ export const runExperiment = ({
   contributionWindowSeconds = 20,
   timeLimitSeconds = durationMinutes === undefined ? 1800 : durationMinutes * 60,
 }) => {
+  if (!Array.isArray(nodeConfigs) || nodeConfigs.filter((n) => n.role === 'seed').length !== 1 ||
+      !nodeConfigs.some((n) => n.role === 'peer') || nodeConfigs.some((n) => !['seed', 'peer'].includes(n.role))) {
+    throw new Error('Provide exactly one initial seeder and at least one leecher');
+  }
+  if (!Number.isFinite(fileSizeMB) || fileSizeMB <= 0) throw new Error('File size must be positive');
+  if (![regularSlots, optimisticSlots].every((x) => Number.isInteger(x) && x >= 0)) throw new Error('Slots must be nonnegative integers');
   if (![0, 0.25, 0.5, 0.75, 1].includes(alphaS) || !Number.isFinite(alphaB) || alphaB < 0 || alphaB > 1) {
     throw new Error('Hybrid alphaS must be a quarter step and alphaB must be between 0 and 1');
   }
