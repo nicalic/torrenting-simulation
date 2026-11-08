@@ -154,11 +154,9 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
   const online = Array(nodeCount).fill(true);
   const churnCursors = Array(nodeCount).fill(0);
   const finishTimes = Array(nodeCount).fill(null);
-  let previousTransfers = [];
-  for (let node = 0; node < nodeCount; node += 1) {
-    previousTransfers.push(Array(nodeCount).fill(0));
-  }
-
+  const contributionTotals = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
+  let contributionRates = contributionTotals.map((row) => row.slice());
+  const history = Array(settings.contributionSteps);
   const ongoing = new Map();
   const reservations = Array.from({ length: nodeCount }, () => new Map());
   const times = [0];
@@ -171,6 +169,10 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       while (events[churnCursors[node]]?.time <= (step - 1) * stepSeconds) {
         online[node] = events[churnCursors[node]++].online;
       }
+    }
+    if ((step - 1) % settings.selectionSteps === 0) {
+      contributionRates = contributionTotals.map((row) =>
+        row.map((mb) => mb * BITS_PER_BYTE / (settings.contributionSteps * stepSeconds)));
     }
     const proposals = [];
 
@@ -193,7 +195,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
         if (hasNeededPiece) {
           interestedNeighbours.push({
             id: receiver,
-            receivedLastStep: previousTransfers[receiver][sender],
+            receivedLastStep: contributionRates[receiver][sender],
           });
         }
       }
@@ -357,7 +359,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
         budgetMB -= sentMB;
         downloadLeft[transfer.receiver] -= sentMB;
         transfers[transfer.sender][transfer.receiver] +=
-          (sentMB * BITS_PER_BYTE) / stepSeconds;
+          sentMB;
       }
     }
 
@@ -393,7 +395,15 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       peerCount === 0 ? 100 : (totalCompletion / peerCount) * 100,
     );
     completedPeers.push(completedCount);
-    previousTransfers = transfers;
+    const historyIndex = (step - 1) % settings.contributionSteps;
+    const expired = history[historyIndex];
+    for (let sender = 0; sender < nodeCount; sender += 1) {
+      for (let receiver = 0; receiver < nodeCount; receiver += 1) {
+        contributionTotals[sender][receiver] = Math.max(0,
+          contributionTotals[sender][receiver] + transfers[sender][receiver] - (expired?.[sender][receiver] ?? 0));
+      }
+    }
+    history[historyIndex] = transfers;
   }
 
   const finishedTimes = [];
