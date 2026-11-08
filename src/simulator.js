@@ -388,15 +388,28 @@ export const runExperiment = ({
   regularSlots,
   optimisticSlots,
   seed,
+  stepSeconds = 0.1,
+  selectionIntervalSeconds = 10,
+  contributionWindowSeconds = 20,
+  timeLimitSeconds = durationMinutes === undefined ? 1800 : durationMinutes * 60,
 }) => {
-  const stepSeconds = 10;
-  const numberOfSteps = (durationMinutes * 60) / stepSeconds;
+  const toSteps = (seconds, name) => {
+    const steps = seconds / stepSeconds;
+    if (!Number.isFinite(steps) || steps < 1 || Math.abs(steps - Math.round(steps)) > 1e-8) {
+      throw new Error(`${name} must be a positive integer multiple of the simulation step`);
+    }
+    return Math.round(steps);
+  };
+  if (!Number.isFinite(stepSeconds) || stepSeconds <= 0) throw new Error('Invalid simulation step');
+  const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
+  const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
+  const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
   const network = makeNetwork(nodeConfigs, averageNeighbours, fileSizeMB, seed);
-  const settings = { regularSlots, optimisticSlots, stepSeconds };
+  const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
     simulateStrategy('prop', network, numberOfSteps, settings, seed),
     simulateStrategy('unchoke', network, numberOfSteps, settings, seed),
   ];
 
-  return { results, network, seed, durationMinutes };
+  return { results, network, seed, settings, durationMinutes: timeLimitSeconds / 60 };
 };
