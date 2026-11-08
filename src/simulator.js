@@ -3,11 +3,13 @@ export const BASE_DOWNLOAD_MBPS = 100;
 export const PIECE_SIZE_MB = (256 * 1024) / 1_000_000;
 
 export const STRATEGY_COLOURS = {
+  hybrid: '#b66cdb',
   prop: '#73b442',
   unchoke: '#438ac2',
 };
 
 export const STRATEGY_NAMES = {
+  hybrid: 'Hybrid reciprocity',
   prop: 'Proportional share',
   unchoke: 'Reciprocity based on unchoking',
 };
@@ -122,6 +124,7 @@ const makeNetwork = (nodeConfigs, fileSizeMB) => {
 
 export const selectReceivers = (strategy, eligible, settings, random) => {
   if (strategy === 'prop') return eligible;
+  if (strategy === 'hybrid') settings = { ...settings, regularSlots: 4 * settings.alphaS, optimisticSlots: 4 - 4 * settings.alphaS };
   const ranked = eligible.map((node) => ({ ...node, tieBreak: random() }))
     .sort((a, b) => b.receivedLastStep - a.receivedLastStep || a.tieBreak - b.tieBreak);
   const regular = ranked.slice(0, settings.regularSlots);
@@ -133,11 +136,14 @@ export const selectReceivers = (strategy, eligible, settings, random) => {
   return [...regular, ...options.slice(0, settings.optimisticSlots)];
 };
 
-export const allocateBandwidth = (strategy, selected) => {
+export const allocateBandwidth = (strategy, selected, settings = {}) => {
   const total = selected.reduce((sum, node) => sum + node.receivedLastStep, 0);
   return selected.map((node) => ({
     ...node,
-    weight: strategy === 'prop' && total > 0 ? node.receivedLastStep : 1,
+    weight: strategy === 'hybrid'
+      ? (1 - settings.alphaB) / selected.length +
+        settings.alphaB * (node.receivedLastStep + 2) / (total + 2 * selected.length)
+      : strategy === 'prop' && total > 0 ? node.receivedLastStep : 1,
   }));
 };
 
@@ -233,12 +239,12 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
         ? interestedNeighbours.map((node) => ({ ...node, receivedLastStep: 0 }))
         : interestedNeighbours;
       if (strategy === 'prop' || (step - 1) % settings.selectionSteps === 0) {
-        selections[sender] = selectReceivers(strategy, candidates, policySettings, random).map((node) => node.id);
+        selections[sender] = selectReceivers(isSeeder && strategy === 'hybrid' ? 'unchoke' : strategy, candidates, isSeeder && strategy === 'hybrid' ? { ...policySettings, regularSlots: 0, optimisticSlots: 4 } : policySettings, random).map((node) => node.id);
       } else {
         selections[sender] = selections[sender].filter((id) => candidates.some((node) => node.id === id));
       }
       const selected = candidates.filter((node) => selections[sender].includes(node.id));
-      const weighted = allocateBandwidth(isSeeder ? 'seed' : strategy, selected);
+      const weighted = allocateBandwidth(isSeeder ? 'seed' : strategy, selected, settings);
       const totalWeight = weighted.reduce((sum, node) => sum + node.weight, 0);
 
       for (const neighbour of weighted) {
@@ -437,8 +443,10 @@ export const runExperiment = ({
   nodeConfigs,
   durationMinutes,
   fileSizeMB,
-  regularSlots,
-  optimisticSlots,
+  regularSlots = 3,
+  optimisticSlots = 1,
+  alphaS = 0.5,
+  alphaB = 0.5,
   seed,
   churnEnabled = false,
   meanOnlineSeconds = 300,
@@ -450,6 +458,9 @@ export const runExperiment = ({
   contributionWindowSeconds = 20,
   timeLimitSeconds = durationMinutes === undefined ? 1800 : durationMinutes * 60,
 }) => {
+  if (![0, 0.25, 0.5, 0.75, 1].includes(alphaS) || !Number.isFinite(alphaB) || alphaB < 0 || alphaB > 1) {
+    throw new Error('Hybrid alphaS must be a quarter step and alphaB must be between 0 and 1');
+  }
   const toSteps = (seconds, name) => {
     const steps = seconds / stepSeconds;
     if (!Number.isFinite(steps) || steps < 1 || Math.abs(steps - Math.round(steps)) > 1e-8) {
@@ -465,8 +476,9 @@ export const runExperiment = ({
   inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   network.churnSchedule = inputs.churnSchedule;
-  const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
+  const settings = { alphaS, alphaB, regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
+    simulateStrategy('hybrid', network, numberOfSteps, settings, seed),
     simulateStrategy('prop', network, numberOfSteps, settings, seed),
     simulateStrategy('unchoke', network, numberOfSteps, settings, seed),
   ];
