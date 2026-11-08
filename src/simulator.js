@@ -449,6 +449,8 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
 
 export const runExperiment = ({
   nodeConfigs,
+  experimentalInputs,
+  strategies = ['hybrid', 'prop', 'unchoke'],
   durationMinutes,
   fileSizeMB,
   regularSlots = 3,
@@ -486,16 +488,13 @@ export const runExperiment = ({
   const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
-  const inputs = createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
-  inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
+  const inputs = experimentalInputs ?? createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
+  if (!experimentalInputs) inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   network.churnSchedule = inputs.churnSchedule;
   const settings = { alphaS, alphaB, regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
-  const results = [
-    simulateStrategy('hybrid', network, numberOfSteps, settings, seed),
-    simulateStrategy('prop', network, numberOfSteps, settings, seed),
-    simulateStrategy('unchoke', network, numberOfSteps, settings, seed),
-  ];
+  if (!strategies.length || strategies.some((name) => !['prop', 'unchoke', 'hybrid'].includes(name))) throw new Error('Unknown strategy');
+  const results = strategies.map((strategy) => simulateStrategy(strategy, network, numberOfSteps, settings, seed));
 
   return { results, network, inputs, seed, settings, durationMinutes: timeLimitSeconds / 60 };
 };
