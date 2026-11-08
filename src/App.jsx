@@ -89,13 +89,12 @@ const initialSettings = {
   heterogeneity: 0, freeRiderRatio: 0, churnEnabled: false,
   meanOnlineSeconds: 300, meanOfflineSeconds: 30,
   alphaS: 0.5, alphaB: 0.5,
-  seed: 42, repetitions: 3,
+  seed: 42,
 };
 
 function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [experiment, setExperiment] = useState(null);
-  const [sweep, setSweep] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const worker = useRef(null);
   useEffect(() => () => worker.current?.terminate(), []);
@@ -105,7 +104,7 @@ function App() {
     worker.current = null;
     setIsRunning(false);
   };
-  const run = (mode) => {
+  const run = () => {
     const config = {
       ...settings,
       nodeConfigs: [{ role: 'seed' }, ...Array.from({ length: settings.peerCount }, () => ({ role: 'peer' }))],
@@ -116,14 +115,13 @@ function App() {
     worker.current = nextWorker;
     setIsRunning(true);
     nextWorker.onmessage = ({ data }) => {
-      if (mode === 'sweep') setSweep(data.result);
-      else setExperiment(data.result);
+      setExperiment(data.result);
       nextWorker.terminate();
       worker.current = null;
       setIsRunning(false);
     };
     nextWorker.onerror = cancel;
-    nextWorker.postMessage({ mode, config });
+    nextWorker.postMessage({ config });
   };
   const download = (value, filename) => {
     const url = URL.createObjectURL(new Blob([exportExperiment(value)], { type: 'application/json' }));
@@ -141,8 +139,7 @@ function App() {
     </div>
   );
   const results = experiment?.results ?? [];
-  const sweepRows = sweep?.repetitions.flatMap((rep) =>
-    rep.comparisons.map((comparison) => ({ ...comparison, seed: rep.seed }))) ?? [];
+
 
   return (
     <div className="shell">
@@ -170,9 +167,7 @@ function App() {
           {numberField('alphaB', 'Hybrid allocation reciprocity αᵦ', 0, 1, 0.05)}
           <p className="hint">Hybrid uses four slots and δ = 2 Mbps. Proportional sharing serves all eligible receivers.</p>
           {numberField('seed', 'Random seed', 0, 4294967295)}
-          {numberField('repetitions', 'Sweep repetitions (consecutive seeds)', 1, 100)}
-          <button className="run-button" disabled={isRunning} onClick={() => run('single')}>Run comparison</button>
-          <button className="run-button" disabled={isRunning} onClick={() => run('sweep')}>Run all sweeps</button>
+          <button className="run-button" disabled={isRunning} onClick={run}>Run comparison</button>
           {isRunning && <><p role="status">Running simulation…</p><button onClick={cancel}>Cancel</button></>}
         </aside>
         <main className="main">
@@ -200,16 +195,6 @@ function App() {
             <ChartPanel experiment={experiment} results={results} chartType="completion" title="Mean downloaded percentage" description="Average fraction of file data held by initial leechers." />
             <ChartPanel experiment={experiment} results={results} chartType="completed" title="Completed initial leechers" description="Peers holding the entire file; includes peers currently offline." />
           </div>
-          {sweep && <section className="panel table-panel">
-            <div className="table-head"><h3>Sweep results · {sweep.seeds.length} seeds</h3>
-              <button onClick={() => download(sweep, 'sweeps.json')}>Export sweeps</button></div>
-            <div className="table-scroll"><table><thead><tr><th>Seed</th><th>Family / policy</th><th>αₛ</th><th>αᵦ</th><th>Completed</th><th>Full swarm finish</th></tr></thead>
-              <tbody>{sweepRows.map((row, i) => <tr key={i}><td>{row.seed}</td>
-                <td>{row.family === 'reference' ? STRATEGY_NAMES[row.result.strategy] : row.family}</td>
-                <td>{row.alphaS ?? '—'}</td><td>{row.alphaB ?? '—'}</td>
-                <td>{row.result.completed}/{row.result.peerCount}</td><td>{formatFinishTime(row.result.swarmFinishSeconds)}</td></tr>)}</tbody>
-            </table></div>
-          </section>}
           <div className="note"><strong>Model assumptions.</strong> Complete graph; one permanent initial seeder at 20 Mbps.
             Leecher upload capacities are sampled once from 20 × U(1−h, 1+h) Mbps; download caps are 100 Mbps.
             Free riders never upload, including after completion. All peers start online; exponential churn preserves data.
@@ -217,7 +202,6 @@ function App() {
             Only complete pieces can be uploaded. Download limits scale desired rates proportionally; unused allocations are not redistributed.
             Slot selections persist until invalid and refill only at selection rounds. Seeders use random selection and equal allocation.
             Contributions count useful bytes over the configured window. Completed peers remain in the swarm subject to churn.
-            Sweeps use α = 0, 0.25, 0.5, 0.75, 1 and reuse conditions within each seed.
             A dash for full-swarm finish means at least one peer did not finish before the deadline.</div>
         </main>
       </div>
