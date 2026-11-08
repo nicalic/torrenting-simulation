@@ -228,7 +228,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
         }
       }
 
-      if (interestedNeighbours.length === 0) continue;
+      if (interestedNeighbours.length === 0) { selections[sender] = []; continue; }
       const B_i = network.uploadMbps[sender];
 
       const isSeeder = network.seedIds.includes(sender) || finishTimes[sender] !== null;
@@ -357,6 +357,13 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
     }
 
     piecesByPeer = nextPieces;
+    settings.onStep?.({
+      strategy, step, online: online.slice(), transfers,
+      piecesByPeer, pieceSizesMB,
+      reservations: reservations.map((entries) => Array.from(entries)),
+      selections: selections.map((ids) => ids.slice()),
+      contributionRates,
+    });
 
     for (const peerId of network.peerIds) {
       if (finishTimes[peerId] !== null) continue;
@@ -379,7 +386,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       for (let piece = 0; piece < network.pieceCount; piece += 1) {
         downloadedMB += piecesByPeer[peerId][piece];
       }
-      totalCompletion += downloadedMB / network.fileSizeMB;
+      totalCompletion += Math.min(1, downloadedMB / network.fileSizeMB);
       if (finishTimes[peerId] !== null) completedCount += 1;
     }
 
@@ -450,6 +457,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
 export const runExperiment = ({
   nodeConfigs,
   experimentalInputs,
+  onStep,
   strategies = ['hybrid', 'prop', 'unchoke'],
   durationMinutes,
   fileSizeMB,
@@ -457,7 +465,7 @@ export const runExperiment = ({
   optimisticSlots = 1,
   alphaS = 0.5,
   alphaB = 0.5,
-  seed,
+  seed = 42,
   churnEnabled = false,
   meanOnlineSeconds = 300,
   meanOfflineSeconds = 30,
@@ -477,6 +485,7 @@ export const runExperiment = ({
   if (![0, 0.25, 0.5, 0.75, 1].includes(alphaS) || !Number.isFinite(alphaB) || alphaB < 0 || alphaB > 1) {
     throw new Error('Hybrid alphaS must be a quarter step and alphaB must be between 0 and 1');
   }
+  if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new Error('Seed must be an unsigned 32-bit integer');
   const toSteps = (seconds, name) => {
     const steps = seconds / stepSeconds;
     if (!Number.isFinite(steps) || steps < 1 || Math.abs(steps - Math.round(steps)) > 1e-8) {
@@ -492,7 +501,7 @@ export const runExperiment = ({
   if (!experimentalInputs) inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   network.churnSchedule = inputs.churnSchedule;
-  const settings = { alphaS, alphaB, regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
+  const settings = { onStep, alphaS, alphaB, regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   if (!strategies.length || strategies.some((name) => !['prop', 'unchoke', 'hybrid'].includes(name))) throw new Error('Unknown strategy');
   const results = strategies.map((strategy) => simulateStrategy(strategy, network, numberOfSteps, settings, seed));
 
