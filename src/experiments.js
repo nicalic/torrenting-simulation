@@ -7,15 +7,20 @@ export const runSweeps = (config, {
   const repetitions = seeds.map((seed) => {
     const reference = runExperiment({ ...config, seed, strategies: ['prop', 'unchoke'] });
     const comparisons = reference.results.map((result) => ({ family: 'reference', result }));
+    const hybridResults = new Map();
     for (const family of ['selection-only', 'allocation-only', 'combined']) {
       for (const alpha of alphas) {
         const alphaS = family === 'allocation-only' ? 0 : alpha;
         const alphaB = family === 'selection-only' ? 0 : alpha;
-        const experiment = runExperiment({
-          ...config, seed, alphaS, alphaB, strategies: ['hybrid'],
-          experimentalInputs: reference.inputs,
-        });
-        comparisons.push({ family, alpha, alphaS, alphaB, result: experiment.results[0] });
+        const key = `${alphaS}:${alphaB}`;
+        if (!hybridResults.has(key)) {
+          const experiment = runExperiment({
+            ...config, seed, alphaS, alphaB, strategies: ['hybrid'],
+            experimentalInputs: reference.inputs,
+          });
+          hybridResults.set(key, experiment.results[0]);
+        }
+        comparisons.push({ family, alpha, alphaS, alphaB, result: hybridResults.get(key) });
       }
     }
     return { seed, inputs: reference.inputs, comparisons };
