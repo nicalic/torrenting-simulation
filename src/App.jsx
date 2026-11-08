@@ -85,11 +85,10 @@ function ChartPanel({ experiment, results, chartType, title, description }) {
 }
 
 const initialSettings = {
-  peerCount: 17, fileSizeMB: 128, timeLimitSeconds: 1800,
-  stepSeconds: 0.1, selectionIntervalSeconds: 10, contributionWindowSeconds: 20,
+  peerCount: 17, fileSizeMB: 128,
   heterogeneity: 0, freeRiderRatio: 0, churnEnabled: false,
   meanOnlineSeconds: 300, meanOfflineSeconds: 30,
-  alphaS: 0.5, alphaB: 0.5, regularSlots: 3, optimisticSlots: 1,
+  alphaS: 0.5, alphaB: 0.5,
   seed: 42, repetitions: 3,
 };
 
@@ -97,7 +96,6 @@ function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [experiment, setExperiment] = useState(null);
   const [sweep, setSweep] = useState(null);
-  const [error, setError] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const worker = useRef(null);
   useEffect(() => () => worker.current?.terminate(), []);
@@ -108,13 +106,6 @@ function App() {
     setIsRunning(false);
   };
   const run = (mode) => {
-    setError('');
-    if (!Number.isInteger(settings.peerCount) || settings.peerCount < 1 || settings.peerCount > 59 ||
-        !Number.isInteger(settings.repetitions) || settings.repetitions < 1 || settings.repetitions > 100 ||
-        settings.freeRiderRatio < 0 || settings.freeRiderRatio > 1) {
-      setError('Use 1–59 leechers, 1–100 repetitions, and a free-rider ratio from 0 to 1.');
-      return;
-    }
     const config = {
       ...settings,
       nodeConfigs: [{ role: 'seed' }, ...Array.from({ length: settings.peerCount }, () => ({ role: 'peer' }))],
@@ -125,14 +116,13 @@ function App() {
     worker.current = nextWorker;
     setIsRunning(true);
     nextWorker.onmessage = ({ data }) => {
-      if (data.error) setError(data.error);
-      else if (mode === 'sweep') setSweep(data.result);
+      if (mode === 'sweep') setSweep(data.result);
       else setExperiment(data.result);
       nextWorker.terminate();
       worker.current = null;
       setIsRunning(false);
     };
-    nextWorker.onerror = (event) => { setError(event.message); cancel(); };
+    nextWorker.onerror = cancel;
     nextWorker.postMessage({ mode, config });
   };
   const download = (value, filename) => {
@@ -175,20 +165,12 @@ function App() {
             {numberField('meanOnlineSeconds', 'Mean online duration (s)', 0.1, 100000, 0.1)}
             {numberField('meanOfflineSeconds', 'Mean offline duration (s)', 0.1, 100000, 0.1)}
           </>}
-          <h2 className="section-title">Timing</h2>
-          {numberField('timeLimitSeconds', 'Time limit (s)', 0.1, 100000, 0.1)}
-          {numberField('stepSeconds', 'Simulation step (s)', 0.01, 10, 0.01)}
-          {numberField('selectionIntervalSeconds', 'Selection interval (s)', 0.1, 1000, 0.1)}
-          {numberField('contributionWindowSeconds', 'Contribution window (s)', 0.1, 1000, 0.1)}
           <h2 className="section-title">Policies</h2>
           {numberField('alphaS', 'Hybrid selection reciprocity αₛ', 0, 1, 0.25)}
           {numberField('alphaB', 'Hybrid allocation reciprocity αᵦ', 0, 1, 0.05)}
-          {numberField('regularSlots', 'Unchoking regular slots', 0, 59)}
-          {numberField('optimisticSlots', 'Unchoking optimistic slots', 0, 59)}
           <p className="hint">Hybrid uses four slots and δ = 2 Mbps. Proportional sharing serves all eligible receivers.</p>
           {numberField('seed', 'Random seed', 0, 4294967295)}
           {numberField('repetitions', 'Sweep repetitions (consecutive seeds)', 1, 100)}
-          {error && <p className="error" role="alert">{error}</p>}
           <button className="run-button" disabled={isRunning} onClick={() => run('single')}>Run comparison</button>
           <button className="run-button" disabled={isRunning} onClick={() => run('sweep')}>Run all sweeps</button>
           {isRunning && <><p role="status">Running simulation…</p><button onClick={cancel}>Cancel</button></>}

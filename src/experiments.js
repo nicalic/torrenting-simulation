@@ -4,10 +4,6 @@ export const runSweeps = (config, {
   seeds = [42, 43, 44],
   alphas = [0, 0.25, 0.5, 0.75, 1],
 } = {}) => {
-  if (!seeds.length || !seeds.every(Number.isInteger)) throw new Error('Supply integer repetition seeds');
-  if (!alphas.length || !alphas.every((alpha) => [0, 0.25, 0.5, 0.75, 1].includes(alpha))) {
-    throw new Error('Sweep alphas must be quarter steps');
-  }
   const repetitions = seeds.map((seed) => {
     const reference = runExperiment({ ...config, seed, strategies: ['prop', 'unchoke'] });
     const comparisons = reference.results.map((result) => ({ family: 'reference', result }));

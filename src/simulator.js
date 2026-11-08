@@ -37,9 +37,6 @@ export const createRandomStreams = (seed) => Object.fromEntries(
 export const createChurnSchedule = (nodeConfigs, seed, timeLimitSeconds, {
   churnEnabled = false, meanOnlineSeconds = 300, meanOfflineSeconds = 30,
 } = {}) => {
-  if (![meanOnlineSeconds, meanOfflineSeconds].every((x) => Number.isFinite(x) && x > 0)) {
-    throw new Error('Churn durations must be positive');
-  }
   const random = createRandomStreams(seed).churn;
   return nodeConfigs.map((node) => {
     const events = [];
@@ -56,15 +53,9 @@ export const createChurnSchedule = (nodeConfigs, seed, timeLimitSeconds, {
 };
 
 export const createExperimentalInputs = (nodeConfigs, seed, { heterogeneity = 0, freeRiderCount = 0 } = {}) => {
-  if (!Number.isFinite(heterogeneity) || heterogeneity < 0 || heterogeneity > 1) {
-    throw new Error('Heterogeneity must be between 0 and 1');
-  }
   const streams = createRandomStreams(seed);
   const random = streams.bandwidth;
   const peers = nodeConfigs.flatMap((node, id) => node.role === 'seed' ? [] : [id]);
-  if (!Number.isInteger(freeRiderCount) || freeRiderCount < 0 || freeRiderCount > peers.length) {
-    throw new Error('Free-rider count must be an integer between zero and the initial leecher count');
-  }
   for (let i = peers.length - 1; i > 0; i -= 1) {
     const j = Math.floor(streams.freeRiders() * (i + 1));
     [peers[i], peers[j]] = [peers[j], peers[i]];
@@ -392,7 +383,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
 
     times.push((step * stepSeconds) / 60);
     averageCompletion.push(
-      peerCount === 0 ? 100 : (totalCompletion / peerCount) * 100,
+      (totalCompletion / peerCount) * 100,
     );
     completedPeers.push(completedCount);
     const historyIndex = (step - 1) % settings.contributionSteps;
@@ -476,33 +467,15 @@ export const runExperiment = ({
   contributionWindowSeconds = 20,
   timeLimitSeconds = durationMinutes === undefined ? 1800 : durationMinutes * 60,
 }) => {
-  if (!Array.isArray(nodeConfigs) || nodeConfigs.filter((n) => n.role === 'seed').length !== 1 ||
-      !nodeConfigs.some((n) => n.role === 'peer') || nodeConfigs.some((n) => !['seed', 'peer'].includes(n.role))) {
-    throw new Error('Provide exactly one initial seeder and at least one leecher');
-  }
-  if (!Number.isFinite(fileSizeMB) || fileSizeMB <= 0) throw new Error('File size must be positive');
-  if (![regularSlots, optimisticSlots].every((x) => Number.isInteger(x) && x >= 0)) throw new Error('Slots must be nonnegative integers');
-  if (![0, 0.25, 0.5, 0.75, 1].includes(alphaS) || !Number.isFinite(alphaB) || alphaB < 0 || alphaB > 1) {
-    throw new Error('Hybrid alphaS must be a quarter step and alphaB must be between 0 and 1');
-  }
-  if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) throw new Error('Seed must be an unsigned 32-bit integer');
-  const toSteps = (seconds, name) => {
-    const steps = seconds / stepSeconds;
-    if (!Number.isFinite(steps) || steps < 1 || Math.abs(steps - Math.round(steps)) > 1e-8) {
-      throw new Error(`${name} must be a positive integer multiple of the simulation step`);
-    }
-    return Math.round(steps);
-  };
-  if (!Number.isFinite(stepSeconds) || stepSeconds <= 0) throw new Error('Invalid simulation step');
-  const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
-  const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
-  const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
+  const toSteps = (seconds) => Math.round(seconds / stepSeconds);
+  const numberOfSteps = toSteps(timeLimitSeconds);
+  const selectionSteps = toSteps(selectionIntervalSeconds);
+  const contributionSteps = toSteps(contributionWindowSeconds);
   const inputs = experimentalInputs ?? createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
   if (!experimentalInputs) inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   network.churnSchedule = inputs.churnSchedule;
   const settings = { onStep, alphaS, alphaB, regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
-  if (!strategies.length || strategies.some((name) => !['prop', 'unchoke', 'hybrid'].includes(name))) throw new Error('Unknown strategy');
   const results = strategies.map((strategy) => simulateStrategy(strategy, network, numberOfSteps, settings, seed));
 
   return { results, network, inputs, seed, settings, durationMinutes: timeLimitSeconds / 60 };
