@@ -84,7 +84,7 @@ function ChartPanel({ experiment, results, chartType, title, description }) {
 }
 
 const initialSettings = {
-  peerCount: 17, fileSizeMB: 128,
+  peerCount: 31, fileSizeMB: 128,
   heterogeneity: 0, freeRiderRatio: 0, churnEnabled: false,
   meanOnlineSeconds: 300, meanOfflineSeconds: 30,
   alphaS: 0.5, alphaB: 0.5,

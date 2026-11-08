@@ -3,7 +3,7 @@ export const BASE_DOWNLOAD_MBPS = 100;
 export const PIECE_SIZE_MB = (256 * 1024) / 1_000_000;
 
 export const STRATEGY_COLOURS = {
-  hybrid: '#b66cdb',
+  hybrid: '#c24d43',
   prop: '#73b442',
   unchoke: '#438ac2',
 };
