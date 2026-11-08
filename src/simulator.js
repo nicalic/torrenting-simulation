@@ -120,6 +120,27 @@ const makeNetwork = (nodeConfigs, fileSizeMB) => {
   };
 };
 
+export const selectReceivers = (strategy, eligible, settings, random) => {
+  if (strategy === 'prop') return eligible;
+  const ranked = eligible.map((node) => ({ ...node, tieBreak: random() }))
+    .sort((a, b) => b.receivedLastStep - a.receivedLastStep || a.tieBreak - b.tieBreak);
+  const regular = ranked.slice(0, settings.regularSlots);
+  const options = ranked.slice(settings.regularSlots);
+  for (let i = options.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return [...regular, ...options.slice(0, settings.optimisticSlots)];
+};
+
+export const allocateBandwidth = (strategy, selected) => {
+  const total = selected.reduce((sum, node) => sum + node.receivedLastStep, 0);
+  return selected.map((node) => ({
+    ...node,
+    weight: strategy === 'prop' && total > 0 ? node.receivedLastStep : 1,
+  }));
+};
+
 export const limitDownloads = (proposals, capacitiesMB) => {
   const incoming = capacitiesMB.map(() => 0);
   for (const transfer of proposals) incoming[transfer.receiver] += transfer.budgetMB;
@@ -203,58 +224,11 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       if (interestedNeighbours.length === 0) continue;
       const B_i = network.uploadMbps[sender];
 
-      if (strategy === 'prop') {
-        for (const neighbour of interestedNeighbours) {
-          neighbour.weight = neighbour.receivedLastStep;
-        }
-      } else {
-        for (const neighbour of interestedNeighbours) {
-          neighbour.tieBreak = random();
-        }
-        interestedNeighbours.sort((left, right) => {
-          const contributionDifference =
-            right.receivedLastStep - left.receivedLastStep;
-          if (contributionDifference !== 0) return contributionDifference;
-          return left.tieBreak - right.tieBreak;
-        });
+      const selected = selectReceivers(strategy, interestedNeighbours, settings, random);
+      const weighted = allocateBandwidth(strategy, selected);
+      const totalWeight = weighted.reduce((sum, node) => sum + node.weight, 0);
 
-        const k_r = Math.min(settings.regularSlots, interestedNeighbours.length);
-        const k_o = Math.min(
-          settings.optimisticSlots,
-          interestedNeighbours.length - k_r,
-        );
-        const unchokedPeers = [];
-
-        for (let slot = 0; slot < k_r; slot += 1) {
-          unchokedPeers.push(interestedNeighbours[slot].id);
-        }
-
-        const optimisticOptions = interestedNeighbours.slice(k_r);
-        for (let index = optimisticOptions.length - 1; index > 0; index -= 1) {
-          const otherIndex = Math.floor(random() * (index + 1));
-          [optimisticOptions[index], optimisticOptions[otherIndex]] = [
-            optimisticOptions[otherIndex],
-            optimisticOptions[index],
-          ];
-        }
-        for (let slot = 0; slot < k_o; slot += 1) {
-          unchokedPeers.push(optimisticOptions[slot].id);
-        }
-
-        for (const neighbour of interestedNeighbours) {
-          neighbour.weight = unchokedPeers.includes(neighbour.id) ? 1 : 0;
-        }
-      }
-
-      let totalWeight = 0;
-      for (const neighbour of interestedNeighbours) totalWeight += neighbour.weight;
-
-      if (strategy === 'prop' && totalWeight === 0) {
-        for (const neighbour of interestedNeighbours) neighbour.weight = 1;
-        totalWeight = interestedNeighbours.length;
-      }
-
-      for (const neighbour of interestedNeighbours) {
+      for (const neighbour of weighted) {
         if (neighbour.weight === 0) continue;
         const uploadRate = (B_i * neighbour.weight) / totalWeight;
         proposals.push({
