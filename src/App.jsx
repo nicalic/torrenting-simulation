@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { STRATEGY_COLOURS, STRATEGY_NAMES } from './simulator.js';
-import { exportExperiment } from './experiments.js';
+import { STRATEGY_COLOURS, STRATEGY_NAMES, exportExperiment } from './simulator.js';
 
 const formatNumber = (value, digits = 2) => Number(value).toFixed(digits);
 const formatFinishTime = (seconds) => seconds === null ? '—' : `${formatNumber(seconds, 1)} s`;

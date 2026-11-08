@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { runSweeps, exportExperiment } from '../src/experiments.js';
+import { runSweeps, exportExperiment } from '../src/simulator.js';
 
 const [configPath, outputPath] = process.argv.slice(2);
 const { config, seeds, alphas } = JSON.parse(await readFile(configPath, 'utf8'));
