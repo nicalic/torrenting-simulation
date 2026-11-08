@@ -32,14 +32,25 @@ export const createRandomStreams = (seed) => Object.fromEntries(
     [name, createRandomGenerator((Number(seed) ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0)]),
 );
 
-export const createExperimentalInputs = (nodeConfigs, seed, { heterogeneity = 0 } = {}) => {
+export const createExperimentalInputs = (nodeConfigs, seed, { heterogeneity = 0, freeRiderCount = 0 } = {}) => {
   if (!Number.isFinite(heterogeneity) || heterogeneity < 0 || heterogeneity > 1) {
     throw new Error('Heterogeneity must be between 0 and 1');
   }
-  const random = createRandomStreams(seed).bandwidth;
+  const streams = createRandomStreams(seed);
+  const random = streams.bandwidth;
+  const peers = nodeConfigs.flatMap((node, id) => node.role === 'seed' ? [] : [id]);
+  if (!Number.isInteger(freeRiderCount) || freeRiderCount < 0 || freeRiderCount > peers.length) {
+    throw new Error('Free-rider count must be an integer between zero and the initial leecher count');
+  }
+  for (let i = peers.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(streams.freeRiders() * (i + 1));
+    [peers[i], peers[j]] = [peers[j], peers[i]];
+  }
+  const freeRiders = new Set(peers.slice(0, freeRiderCount));
   return {
-    nodeConfigs: nodeConfigs.map((node) => ({
+    nodeConfigs: nodeConfigs.map((node, id) => ({
       ...node,
+      isFreeRider: freeRiders.has(id),
       uploadMultiplier: node.role === 'seed' ? 1 : 1 - heterogeneity + 2 * heterogeneity * random(),
       downloadMultiplier: 1,
     })),
@@ -62,14 +73,14 @@ const makeNetwork = (nodeConfigs, fileSizeMB) => {
 
   for (let node = 0; node < nodeCount; node += 1) {
     const config = nodeConfigs[node];
-    uploadMbps.push(BASE_UPLOAD_MBPS * config.uploadMultiplier);
+    uploadMbps.push(config.isFreeRider ? 0 : BASE_UPLOAD_MBPS * config.uploadMultiplier);
     downloadCapMbps.push(BASE_DOWNLOAD_MBPS * config.downloadMultiplier);
 
     if (config.role === 'seed') {
       seedIds.push(node);
     } else {
       peerIds.push(node);
-      if (config.uploadMultiplier === 0) freeRiderIds.push(node);
+      if (config.isFreeRider) freeRiderIds.push(node);
     }
   }
 
@@ -377,6 +388,7 @@ export const runExperiment = ({
   optimisticSlots,
   seed,
   heterogeneity = 0,
+  freeRiderCount = 0,
   stepSeconds = 0.1,
   selectionIntervalSeconds = 10,
   contributionWindowSeconds = 20,
@@ -393,7 +405,7 @@ export const runExperiment = ({
   const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
-  const inputs = createExperimentalInputs(nodeConfigs, seed, { heterogeneity });
+  const inputs = createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
