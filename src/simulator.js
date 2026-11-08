@@ -26,6 +26,17 @@ export const createRandomGenerator = (seed) => {
   };
 };
 
+// Named streams keep environmental draws independent of policy decisions.
+export const createRandomStreams = (seed) => Object.fromEntries(
+  ['bandwidth', 'freeRiders', 'churn', 'policy'].map((name, index) =>
+    [name, createRandomGenerator((Number(seed) ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0)]),
+);
+
+export const createExperimentalInputs = (nodeConfigs, seed) => ({
+  nodeConfigs: nodeConfigs.map((node) => ({ ...node })),
+  seed,
+});
+
 const makeNetwork = (nodeConfigs, fileSizeMB) => {
   const nodeCount = nodeConfigs.length;
   const links = Array.from({ length: nodeCount }, (_, node) =>
@@ -69,7 +80,7 @@ const makeNetwork = (nodeConfigs, fileSizeMB) => {
 const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
   const nodeCount = network.uploadMbps.length;
   const peerCount = network.peerIds.length;
-  const random = createRandomGenerator(seed);
+  const random = createRandomStreams(seed).policy;
   const stepSeconds = settings.stepSeconds;
 
   const pieceSizesMB = [];
@@ -370,12 +381,13 @@ export const runExperiment = ({
   const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
-  const network = makeNetwork(nodeConfigs, fileSizeMB);
+  const inputs = createExperimentalInputs(nodeConfigs, seed);
+  const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
   const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
     simulateStrategy('prop', network, numberOfSteps, settings, seed),
     simulateStrategy('unchoke', network, numberOfSteps, settings, seed),
   ];
 
-  return { results, network, seed, settings, durationMinutes: timeLimitSeconds / 60 };
+  return { results, network, inputs, seed, settings, durationMinutes: timeLimitSeconds / 60 };
 };
