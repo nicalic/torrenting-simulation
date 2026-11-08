@@ -32,6 +32,27 @@ export const createRandomStreams = (seed) => Object.fromEntries(
     [name, createRandomGenerator((Number(seed) ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0)]),
 );
 
+export const createChurnSchedule = (nodeConfigs, seed, timeLimitSeconds, {
+  churnEnabled = false, meanOnlineSeconds = 300, meanOfflineSeconds = 30,
+} = {}) => {
+  if (![meanOnlineSeconds, meanOfflineSeconds].every((x) => Number.isFinite(x) && x > 0)) {
+    throw new Error('Churn durations must be positive');
+  }
+  const random = createRandomStreams(seed).churn;
+  return nodeConfigs.map((node) => {
+    const events = [];
+    if (!churnEnabled || node.role === 'seed') return events;
+    let time = 0;
+    let online = true;
+    while (time < timeLimitSeconds) {
+      time += -Math.log(1 - random()) * (online ? meanOnlineSeconds : meanOfflineSeconds);
+      online = !online;
+      if (time < timeLimitSeconds) events.push({ time, online });
+    }
+    return events;
+  });
+};
+
 export const createExperimentalInputs = (nodeConfigs, seed, { heterogeneity = 0, freeRiderCount = 0 } = {}) => {
   if (!Number.isFinite(heterogeneity) || heterogeneity < 0 || heterogeneity > 1) {
     throw new Error('Heterogeneity must be between 0 and 1');
@@ -121,6 +142,8 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
     }
   }
 
+  const online = Array(nodeCount).fill(true);
+  const churnCursors = Array(nodeCount).fill(0);
   const finishTimes = Array(nodeCount).fill(null);
   let previousTransfers = [];
   for (let node = 0; node < nodeCount; node += 1) {
@@ -132,12 +155,20 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
   const completedPeers = [0];
 
   for (let step = 1; step <= numberOfSteps; step += 1) {
+    for (let node = 0; node < nodeCount; node += 1) {
+      const events = network.churnSchedule[node];
+      while (events[churnCursors[node]]?.time <= (step - 1) * stepSeconds) {
+        online[node] = events[churnCursors[node]++].online;
+      }
+    }
     const proposals = [];
 
     for (let sender = 0; sender < nodeCount; sender += 1) {
+      if (!online[sender] || network.uploadMbps[sender] === 0) continue;
       const interestedNeighbours = [];
 
       for (const receiver of network.links[sender]) {
+        if (!online[receiver]) continue;
         let hasNeededPiece = false;
         for (let piece = 0; piece < network.pieceCount; piece += 1) {
           const senderHasPiece = piecesByPeer[sender][piece] === pieceSizesMB[piece];
@@ -387,6 +418,9 @@ export const runExperiment = ({
   regularSlots,
   optimisticSlots,
   seed,
+  churnEnabled = false,
+  meanOnlineSeconds = 300,
+  meanOfflineSeconds = 30,
   heterogeneity = 0,
   freeRiderCount = 0,
   stepSeconds = 0.1,
@@ -406,7 +440,9 @@ export const runExperiment = ({
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
   const inputs = createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
+  inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, { churnEnabled, meanOnlineSeconds, meanOfflineSeconds });
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
+  network.churnSchedule = inputs.churnSchedule;
   const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
     simulateStrategy('prop', network, numberOfSteps, settings, seed),
