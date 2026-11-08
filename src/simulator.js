@@ -159,6 +159,8 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
     previousTransfers.push(Array(nodeCount).fill(0));
   }
 
+  const ongoing = new Map();
+  const reservations = Array.from({ length: nodeCount }, () => new Map());
   const times = [0];
   const averageCompletion = [0];
   const completedPeers = [0];
@@ -291,7 +293,16 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       }
     }
 
-    for (const transfer of limitDownloads(proposals, downloadLeft)) {
+    const limited = limitDownloads(proposals, downloadLeft);
+    const active = new Set(limited.filter((t) => t.budgetMB > 0).map((t) => t.sender + ':' + t.receiver));
+    for (const [key, transfer] of ongoing) {
+      if (!active.has(key)) {
+        reservations[transfer.receiver].delete(transfer.piece);
+        ongoing.delete(key);
+      }
+    }
+    for (const transfer of limited) {
+      const key = transfer.sender + ':' + transfer.receiver;
       let budgetMB = Math.min(
         transfer.budgetMB,
         downloadLeft[transfer.receiver],
@@ -306,7 +317,8 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
             piecesByPeer[transfer.sender][piece] === pieceSizesMB[piece];
           const receiverHasPiece =
             nextPieces[transfer.receiver][piece] === pieceSizesMB[piece];
-          if (!senderHasPiece || receiverHasPiece) continue;
+          const owner = reservations[transfer.receiver].get(piece);
+          if (!senderHasPiece || receiverHasPiece || (owner !== undefined && owner !== transfer.sender)) continue;
 
           if (pieceCounts[piece] < rarestFrequency) {
             rarestFrequency = pieceCounts[piece];
@@ -319,7 +331,9 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
 
         if (rarestPieces.length === 0) break;
         const choice = Math.floor(random() * rarestPieces.length);
-        const selectedPiece = rarestPieces[choice];
+        const selectedPiece = ongoing.get(key)?.piece ?? rarestPieces[choice];
+        reservations[transfer.receiver].set(selectedPiece, transfer.sender);
+        ongoing.set(key, { ...transfer, piece: selectedPiece });
         const missingMB =
           pieceSizesMB[selectedPiece] -
           nextPieces[transfer.receiver][selectedPiece];
@@ -334,6 +348,8 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
         if (sentMB === missingMB) {
           nextPieces[transfer.receiver][selectedPiece] =
             pieceSizesMB[selectedPiece];
+          reservations[transfer.receiver].delete(selectedPiece);
+          ongoing.delete(key);
         } else {
           nextPieces[transfer.receiver][selectedPiece] += sentMB;
         }
