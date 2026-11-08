@@ -178,6 +178,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
   const contributionTotals = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
   let contributionRates = contributionTotals.map((row) => row.slice());
   const history = Array(settings.contributionSteps);
+  const selections = Array.from({ length: nodeCount }, () => []);
   const ongoing = new Map();
   const reservations = Array.from({ length: nodeCount }, () => new Map());
   const times = [0];
@@ -198,7 +199,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
     const proposals = [];
 
     for (let sender = 0; sender < nodeCount; sender += 1) {
-      if (!online[sender] || network.uploadMbps[sender] === 0) continue;
+      if (!online[sender] || network.uploadMbps[sender] === 0) { selections[sender] = []; continue; }
       const interestedNeighbours = [];
 
       for (const receiver of network.links[sender]) {
@@ -224,8 +225,20 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       if (interestedNeighbours.length === 0) continue;
       const B_i = network.uploadMbps[sender];
 
-      const selected = selectReceivers(strategy, interestedNeighbours, settings, random);
-      const weighted = allocateBandwidth(strategy, selected);
+      const isSeeder = network.seedIds.includes(sender) || finishTimes[sender] !== null;
+      const policySettings = isSeeder
+        ? { ...settings, regularSlots: 0, optimisticSlots: settings.regularSlots + settings.optimisticSlots }
+        : settings;
+      const candidates = isSeeder
+        ? interestedNeighbours.map((node) => ({ ...node, receivedLastStep: 0 }))
+        : interestedNeighbours;
+      if (strategy === 'prop' || (step - 1) % settings.selectionSteps === 0) {
+        selections[sender] = selectReceivers(strategy, candidates, policySettings, random).map((node) => node.id);
+      } else {
+        selections[sender] = selections[sender].filter((id) => candidates.some((node) => node.id === id));
+      }
+      const selected = candidates.filter((node) => selections[sender].includes(node.id));
+      const weighted = allocateBandwidth(isSeeder ? 'seed' : strategy, selected);
       const totalWeight = weighted.reduce((sum, node) => sum + node.weight, 0);
 
       for (const neighbour of weighted) {
