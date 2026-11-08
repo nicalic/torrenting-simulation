@@ -13,8 +13,6 @@ export const STRATEGY_NAMES = {
 };
 
 const BITS_PER_BYTE = 8;
-const SHORTCUTS_PER_NODE = 1.2;
-const SHORTCUT_CHANCE = 0.13;
 
 // mulberry32 seeded rng from https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
 export const createRandomGenerator = (seed) => {
@@ -28,42 +26,11 @@ export const createRandomGenerator = (seed) => {
   };
 };
 
-const makeNetwork = (nodeConfigs, averageNeighbours, fileSizeMB, seed) => {
+const makeNetwork = (nodeConfigs, fileSizeMB) => {
   const nodeCount = nodeConfigs.length;
-  const random = createRandomGenerator(seed);
-  const links = [];
-  for (let node = 0; node < nodeCount; node += 1) {
-    links.push([]);
-  }
-
-  const maxDegree = Math.min(nodeCount - 1, Math.max(2, averageNeighbours));
-  const ringDistance = Math.ceil(maxDegree / 2);
-  for (let node = 0; node < nodeCount; node += 1) {
-    for (let distance = 1; distance <= ringDistance; distance += 1) {
-      const neighbour = (node + distance) % nodeCount;
-      if (!links[node].includes(neighbour)) links[node].push(neighbour);
-      if (!links[neighbour].includes(node)) links[neighbour].push(node);
-    }
-  }
-
-  const shortcutAttempts = Math.floor(nodeCount * SHORTCUTS_PER_NODE);
-  for (let attempt = 0; attempt < shortcutAttempts; attempt += 1) {
-    if (random() > SHORTCUT_CHANCE) continue;
-
-    const source = Math.floor(random() * nodeCount);
-    const options = [];
-    for (let node = 0; node < nodeCount; node += 1) {
-      if (node !== source && !links[source].includes(node)) {
-        options.push(node);
-      }
-    }
-    if (options.length === 0) continue;
-
-    const choice = Math.floor(random() * options.length);
-    const target = options[choice];
-    links[source].push(target);
-    links[target].push(source);
-  }
+  const links = Array.from({ length: nodeCount }, (_, node) =>
+    Array.from({ length: nodeCount }, (_, other) => other).filter((other) => other !== node),
+  );
 
   const uploadMbps = [];
   const downloadCapMbps = [];
@@ -382,7 +349,6 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
 
 export const runExperiment = ({
   nodeConfigs,
-  averageNeighbours,
   durationMinutes,
   fileSizeMB,
   regularSlots,
@@ -404,7 +370,7 @@ export const runExperiment = ({
   const numberOfSteps = toSteps(timeLimitSeconds, 'Time limit');
   const selectionSteps = toSteps(selectionIntervalSeconds, 'Selection interval');
   const contributionSteps = toSteps(contributionWindowSeconds, 'Contribution window');
-  const network = makeNetwork(nodeConfigs, averageNeighbours, fileSizeMB, seed);
+  const network = makeNetwork(nodeConfigs, fileSizeMB);
   const settings = { regularSlots, optimisticSlots, stepSeconds, selectionSteps, contributionSteps };
   const results = [
     simulateStrategy('prop', network, numberOfSteps, settings, seed),

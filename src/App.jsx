@@ -95,7 +95,7 @@ function ChartPanel({ experiment, results, chartType, title, description }) {
 
 function App() {
   const [settings, setSettings] = useState({
-    averageNeighbours: 6, durationMinutes: 20, fileSizeMB: 512,
+    durationMinutes: 30, fileSizeMB: 512,
     regularSlots: 3, optimisticSlots: 1, seed: 42,
   });
   const [nodeConfigs, setNodeConfigs] = useState(Array.from({ length: 18 }, (_, i) => ({
@@ -196,7 +196,6 @@ function App() {
       try {
         const results = runExperiment({
           nodeConfigs,
-          averageNeighbours: settings.averageNeighbours,
           durationMinutes: settings.durationMinutes,
           fileSizeMB: settings.fileSizeMB,
           regularSlots: Math.max(0, settings.regularSlots),
@@ -233,14 +232,6 @@ function App() {
       <div className="layout">
         <aside className="panel controls">
           <h2 className="section-title">Simulation setup</h2>
-          <div className="field">
-            <div className="field-head">
-              <label htmlFor="degree">Average neighbours</label>
-              <output>{settings.averageNeighbours}</output>
-            </div>
-            <input id="degree" type="range" min="2" max="14" step="1" value={settings.averageNeighbours} onChange={(e) => updateSetting('averageNeighbours', Number(e.target.value))} />
-            <div className="range-bounds"><span>2</span><span>14</span></div>
-          </div>
           <div className="two-col">
             <div className="field">
               <div className="field-head"><label htmlFor="duration">Duration</label></div>
