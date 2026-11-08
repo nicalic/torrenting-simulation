@@ -120,6 +120,15 @@ const makeNetwork = (nodeConfigs, fileSizeMB) => {
   };
 };
 
+export const limitDownloads = (proposals, capacitiesMB) => {
+  const incoming = capacitiesMB.map(() => 0);
+  for (const transfer of proposals) incoming[transfer.receiver] += transfer.budgetMB;
+  return proposals.map((transfer) => ({
+    ...transfer,
+    budgetMB: transfer.budgetMB * Math.min(1, capacitiesMB[transfer.receiver] / (incoming[transfer.receiver] || 1)),
+  }));
+};
+
 const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
   const nodeCount = network.uploadMbps.length;
   const peerCount = network.peerIds.length;
@@ -282,7 +291,7 @@ const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
       }
     }
 
-    for (const transfer of proposals) {
+    for (const transfer of limitDownloads(proposals, downloadLeft)) {
       let budgetMB = Math.min(
         transfer.budgetMB,
         downloadLeft[transfer.receiver],
