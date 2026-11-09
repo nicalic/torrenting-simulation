@@ -435,6 +435,11 @@ input[type="range"] {
   border-left: 3px solid #437b2b;
 }
 
+.intro-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .intro h2 {
   margin: 0;
   font-size: 22px;
