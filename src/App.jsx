@@ -1,18 +1,8 @@
-import { useEffect, useState } from 'react';
-import {
-  BASE_DOWNLOAD_MBPS,
-  BASE_UPLOAD_MBPS,
-  STRATEGY_COLOURS,
-  STRATEGY_NAMES,
-  runExperiment,
-  createRandomGenerator,
-} from './simulator.js';
+import { useEffect, useRef, useState } from 'react';
+import { STRATEGY_COLOURS, STRATEGY_NAMES, exportExperiment } from './simulator.js';
 
 const formatNumber = (value, digits = 2) => Number(value).toFixed(digits);
-const formatFinishTime = (minutes) => {
-  if (minutes === null) return '-';
-  return `${formatNumber(minutes, 1)} min`;
-};
+const formatFinishTime = (seconds) => seconds === null ? '—' : `${formatNumber(seconds, 1)} s`;
 
 function ChartPanel({ experiment, results, chartType, title, description }) {
   const chartWidth = 600;
@@ -77,7 +67,7 @@ function ChartPanel({ experiment, results, chartType, title, description }) {
               ? result.averageCompletion
               : result.completedPeers;
             const chartPoints = values.map((value, index) => {
-              const x = leftMargin + (plotWidth * index) / (values.length - 1);
+              const x = leftMargin + plotWidth * result.times[index] / durationMinutes;
               const y = topMargin + plotHeight - (value / maxValue) * plotHeight;
               return `${x},${y}`;
             }).join(' ');
@@ -93,408 +83,211 @@ function ChartPanel({ experiment, results, chartType, title, description }) {
   );
 }
 
+const initialSettings = {
+  peerCount: 31, fileSizeMB: 128,
+  heterogeneity: 0, freeRiderRatio: 0, churnEnabled: false,
+  meanOnlineSeconds: 300, meanOfflineSeconds: 30,
+  alphaS: 0.5, alphaB: 0.5,
+  seed: 42,
+};
+
+const isValidComparison = (data) => {
+  const config = data?.config;
+  if (data?.schemaVersion !== 1 || !config || !data.network || !Array.isArray(data.results)) return false;
+  if (!Array.isArray(config.nodeConfigs) || !Array.isArray(data.network.peerIds)) return false;
+  if (config.nodeConfigs.length !== config.peerCount + 1) return false;
+  if (config.nodeConfigs.filter((node) => node.role === 'peer').length !== config.peerCount) return false;
+  if (config.nodeConfigs.filter((node) => node.role === 'seed').length !== 1) return false;
+  if (data.network.peerIds.length !== config.peerCount || !Number.isFinite(data.durationMinutes) || data.durationMinutes <= 0) return false;
+
+  const numbers = [
+    config.peerCount, config.fileSizeMB, config.heterogeneity, config.freeRiderRatio,
+    config.meanOnlineSeconds, config.meanOfflineSeconds, config.alphaS, config.alphaB, config.seed,
+  ];
+  if (!numbers.every(Number.isFinite)) return false;
+  if (!Number.isInteger(config.peerCount) || config.peerCount < 1 || config.peerCount > 59) return false;
+  if (!Number.isInteger(config.seed) || config.seed < 0 || config.seed > 4294967295) return false;
+  if (config.fileSizeMB <= 0 || config.fileSizeMB > 1024) return false;
+  if (config.heterogeneity < 0 || config.heterogeneity > 1 || config.freeRiderRatio < 0 || config.freeRiderRatio > 1) return false;
+  if (config.alphaS < 0 || config.alphaS > 1 || config.alphaB < 0 || config.alphaB > 1) return false;
+  if (config.meanOnlineSeconds <= 0 || config.meanOfflineSeconds <= 0 || typeof config.churnEnabled !== 'boolean') return false;
+  if (!Array.isArray(data.network.seedIds) || data.network.seedIds.length !== 1) return false;
+  if (!Array.isArray(data.network.freeRiderIds) || data.results.length !== 3) return false;
+  if (!Number.isInteger(config.freeRiderCount) || data.network.freeRiderIds.length !== config.freeRiderCount) return false;
+
+  return data.results.every((result) =>
+    ['hybrid', 'prop', 'unchoke'].includes(result.strategy) &&
+    Array.isArray(result.times) &&
+    Array.isArray(result.averageCompletion) &&
+    Array.isArray(result.completedPeers) &&
+    result.times.length > 0 &&
+    result.averageCompletion.length === result.times.length &&
+    result.completedPeers.length === result.times.length &&
+    result.times.every(Number.isFinite) &&
+    result.averageCompletion.every(Number.isFinite) &&
+    result.completedPeers.every(Number.isFinite) &&
+    result.peerCount === config.peerCount &&
+    Number.isFinite(result.finalCompletion) &&
+    Number.isFinite(result.completed) &&
+    Number.isFinite(result.completionFraction) &&
+    Number.isFinite(result.finishedTimesCount) &&
+    Number.isFinite(result.elapsedSeconds) &&
+    ['complete', 'deadline'].includes(result.termination) &&
+    (result.firstFinishMinutes === null || Number.isFinite(result.firstFinishMinutes)) &&
+    (result.swarmFinishSeconds === null || Number.isFinite(result.swarmFinishSeconds)) &&
+    (result.meanFinishMinutes === null || Number.isFinite(result.meanFinishMinutes)),
+  );
+};
+
 function App() {
-  const [settings, setSettings] = useState({
-    averageNeighbours: 6, durationMinutes: 20, fileSizeMB: 512,
-    regularSlots: 3, optimisticSlots: 1, seed: 42,
-  });
-  const [nodeConfigs, setNodeConfigs] = useState(Array.from({ length: 18 }, (_, i) => ({
-    role: i === 0 ? 'seed' : 'peer', uploadMultiplier: 1, downloadMultiplier: 1,
-  })));
+  const [settings, setSettings] = useState(initialSettings);
   const [experiment, setExperiment] = useState(null);
-  const [error, setError] = useState('');
   const [isRunning, setIsRunning] = useState(false);
-  const seedCount = nodeConfigs.filter((node) => node.role === 'seed').length;
-  const peerCount = nodeConfigs.length - seedCount;
-  const freeRiderCount = nodeConfigs.filter(
-    (node) => node.role === 'peer' && node.uploadMultiplier === 0,
-  ).length;
-
-  const updateSetting = (key, value) => {
-    setSettings((current) => ({ ...current, [key]: value }));
+  const worker = useRef(null);
+  const importInput = useRef(null);
+  useEffect(() => () => worker.current?.terminate(), []);
+  const update = (key, value) => setSettings((current) => ({ ...current, [key]: value }));
+  const cancel = () => {
+    worker.current?.terminate();
+    worker.current = null;
+    setIsRunning(false);
   };
-
-  const updateNode = (index, key, value) => {
-    setNodeConfigs((current) =>
-      current.map((node, nodeIndex) =>
-        nodeIndex === index ? { ...node, [key]: value } : node,
-      ),
-    );
-  };
-
-  const handleAddNode = (role) => {
-    setNodeConfigs((current) => {
-      if (current.length === 60) return current;
-      return [...current, { role, uploadMultiplier: 1, downloadMultiplier: 1 }];
-    });
-  };
-
-  const handleRemoveNode = (index) => setNodeConfigs((current) => current.filter((_, i) => i !== index));
-
-  const randomiseRates = () => {
-    const random = createRandomGenerator(settings.seed);
-
-    setNodeConfigs((current) =>
-      current.map((node) => ({
-        ...node,
-        uploadMultiplier: Math.floor(random() * 51) / 10,
-        downloadMultiplier: (Math.floor(random() * 50) + 1) / 10,
-      })),
-    );
-  };
-
-  const changeFreeRiderCount = (count) => {
-    setNodeConfigs((current) => {
-      const updated = current.slice();
-      let freeRiderCount = current.filter(
-        (node) => node.role === 'peer' && node.uploadMultiplier === 0,
-      ).length;
-
-      if (count > freeRiderCount) {
-        for (let index = 0; index < updated.length && freeRiderCount < count; index += 1) {
-          const node = updated[index];
-          if (node.role !== 'peer' || node.uploadMultiplier === 0) continue;
-
-          updated[index] = { ...node, uploadMultiplier: 0 };
-          freeRiderCount += 1;
-        }
-      } else {
-        for (let index = updated.length - 1; index >= 0 && freeRiderCount > count; index -= 1) {
-          const node = updated[index];
-          if (node.role !== 'peer' || node.uploadMultiplier !== 0) continue;
-
-          updated[index] = { ...node, uploadMultiplier: 1 };
-          freeRiderCount -= 1;
-        }
-      }
-
-      return updated;
-    });
-  };
-
-  const handleRunSimulation = () => {
-    setError('');
-    if (nodeConfigs.length < 1) {
-      setError('Add at least one node');
-      return;
-    }
-    if (
-      nodeConfigs.some(
-        (node) =>
-          node.uploadMultiplier < 0 ||
-          node.uploadMultiplier > 5 ||
-          node.downloadMultiplier < 0.1 ||
-          node.downloadMultiplier > 5,
-      )
-    ) {
-      setError('Upload multipliers must be 0×–5× and download multipliers must be 0.1×–5×');
-      return;
-    }
-
+  const run = () => {
+    const config = {
+      ...settings,
+      nodeConfigs: [{ role: 'seed' }, ...Array.from({ length: settings.peerCount }, () => ({ role: 'peer' }))],
+      freeRiderCount: Math.round(settings.peerCount * settings.freeRiderRatio),
+    };
+    worker.current?.terminate();
+    const nextWorker = new Worker(new URL('./simulation.worker.js', import.meta.url), { type: 'module' });
+    worker.current = nextWorker;
     setIsRunning(true);
-    requestAnimationFrame(() => {
-      try {
-        const results = runExperiment({
-          nodeConfigs,
-          averageNeighbours: settings.averageNeighbours,
-          durationMinutes: settings.durationMinutes,
-          fileSizeMB: settings.fileSizeMB,
-          regularSlots: Math.max(0, settings.regularSlots),
-          optimisticSlots: Math.max(0, settings.optimisticSlots),
-          seed: settings.seed,
-        });
-        setExperiment(results);
-      } catch (err) {
-        setError(`Simulation error: ${err.message}`);
-      } finally {
-        setIsRunning(false);
-      }
-    });
+    nextWorker.onmessage = ({ data }) => {
+      setExperiment(data.result);
+      nextWorker.terminate();
+      worker.current = null;
+      setIsRunning(false);
+    };
+    nextWorker.onerror = cancel;
+    nextWorker.postMessage({ config });
   };
+  const download = (value, filename) => {
+    const url = URL.createObjectURL(new Blob([exportExperiment(value)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const importComparison = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-  useEffect(() => {
-    handleRunSimulation();
-  }, []);
+    try {
+      const comparison = JSON.parse(await file.text());
+      if (!isValidComparison(comparison)) throw new Error();
 
+      worker.current?.terminate();
+      worker.current = null;
+      setIsRunning(false);
+      setSettings({
+        peerCount: comparison.config.peerCount,
+        fileSizeMB: comparison.config.fileSizeMB,
+        heterogeneity: comparison.config.heterogeneity,
+        freeRiderRatio: comparison.config.freeRiderRatio,
+        churnEnabled: comparison.config.churnEnabled,
+        meanOnlineSeconds: comparison.config.meanOnlineSeconds,
+        meanOfflineSeconds: comparison.config.meanOfflineSeconds,
+        alphaS: comparison.config.alphaS,
+        alphaB: comparison.config.alphaB,
+        seed: comparison.config.seed,
+      });
+      setExperiment(comparison);
+    } catch {
+      window.alert('Invalid JSON file');
+    }
+
+    event.target.value = '';
+  };
+  const numberField = (key, label, min, max, step = 1) => (
+    <div className="field" key={key}>
+      <div className="field-head"><label htmlFor={key}>{label}</label></div>
+      <input id={key} type="number" min={min} max={max} step={step} value={settings[key]}
+        onChange={(e) => update(key, Number(e.target.value))} />
+    </div>
+  );
   const results = experiment?.results ?? [];
+
 
   return (
     <div className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <div>
-            <div className="eyebrow">COMP3821 Project</div>
-            <h1>Torrenting simulation</h1>
-            <p className="subtitle">Examining the impact of peer reciprocity in common torrenting scenarios.</p>
-          </div>
-        </div>
-      </header>
-
+      <header className="topbar"><div className="brand">
+        <div className="eyebrow">COMP3821 Project</div>
+        <h1>Torrenting simulation</h1>
+        <p className="subtitle">Compare reciprocity policies under the same swarm conditions.</p>
+      </div></header>
       <div className="layout">
         <aside className="panel controls">
-          <h2 className="section-title">Simulation setup</h2>
-          <div className="field">
-            <div className="field-head">
-              <label htmlFor="degree">Average neighbours</label>
-              <output>{settings.averageNeighbours}</output>
-            </div>
-            <input id="degree" type="range" min="2" max="14" step="1" value={settings.averageNeighbours} onChange={(e) => updateSetting('averageNeighbours', Number(e.target.value))} />
-            <div className="range-bounds"><span>2</span><span>14</span></div>
-          </div>
-          <div className="two-col">
-            <div className="field">
-              <div className="field-head"><label htmlFor="duration">Duration</label></div>
-              <select id="duration" value={settings.durationMinutes} onChange={(e) => updateSetting('durationMinutes', Number(e.target.value))}>
-                {[5, 10, 20, 30, 60].map((minutes) => (
-                  <option value={minutes} key={minutes}>{minutes} min</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <div className="field-head"><label htmlFor="fileSize">File size</label></div>
-              <select id="fileSize" value={settings.fileSizeMB} onChange={(e) => updateSetting('fileSizeMB', Number(e.target.value))}>
-                <option value="128">128 MB</option>
-                <option value="256">256 MB</option>
-                <option value="512">512 MB</option>
-                <option value="1024">1 GB</option>
-              </select>
-            </div>
-          </div>
-
-          <section className="node-roster" aria-labelledby="nodes-title">
-            <div className="node-roster-head">
-              <h2 id="nodes-title" className="section-title">
-                Nodes <small>{nodeConfigs.length} total · {seedCount} seed{seedCount === 1 ? '' : 's'}</small>
-              </h2>
-              <div className="node-actions">
-                <button className="small-button" type="button" onClick={() => handleAddNode('seed')} disabled={nodeConfigs.length === 60}>+ Seed</button>
-                <button className="small-button" type="button" onClick={() => handleAddNode('peer')} disabled={nodeConfigs.length === 60}>+ Peer</button>
-              </div>
-            </div>
-            <div className="node-randomise-row">
-              <button className="small-button" type="button" onClick={randomiseRates}>Randomise rates (once per seed)</button>
-            </div>
-            <div className="node-columns"><span>ID</span><span>Type</span><span>Up ×</span><span>Down ×</span><span /></div>
-            <div className="node-list" aria-label="Peer and seed settings">
-              {nodeConfigs.map((node, index) => (
-                <div className="node-row" key={index}>
-                  <span className="node-id">{String(index + 1).padStart(2, '0')}</span>
-                  <select
-                    className="node-type"
-                    value={node.role}
-                    aria-label={`Node ${index + 1} type`}
-                    onChange={(e) => updateNode(index, 'role', e.target.value)}
-                  >
-                    <option value="peer">Peer</option>
-                    <option value="seed">Seed</option>
-                  </select>
-                  <input
-                    className="upload-multiplier"
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.1"
-                    value={node.uploadMultiplier}
-                    aria-label={`Node ${index + 1} upload multiplier`}
-                    title="Upload multiplier"
-                    onChange={(e) => updateNode(index, 'uploadMultiplier', Number(e.target.value))}
-                  />
-                  <input
-                    className="download-multiplier"
-                    type="number"
-                    min="0.1"
-                    max="5"
-                    step="0.1"
-                    value={node.downloadMultiplier}
-                    aria-label={`Node ${index + 1} download multiplier`}
-                    title="Download multiplier"
-                    onChange={(e) => updateNode(index, 'downloadMultiplier', Number(e.target.value))}
-                  />
-                  <button className="node-remove" type="button" onClick={() => handleRemoveNode(index)} aria-label={`Remove node ${index + 1}`} title="Remove node">×</button>
-                </div>
-              ))}
-            </div>
-            <p className="hint">Upload = {BASE_UPLOAD_MBPS} mbps × up, download = {BASE_DOWNLOAD_MBPS} mbps × down. You can still set an individual node's upload to 0×.</p>
-          </section>
-
-          <section className="free-rider-box" aria-labelledby="free-riders-title">
-            <h2 id="free-riders-title" className="section-title">Free riders</h2>
-            <div className="free-rider-control">
-              <input
-                className="free-rider-input"
-                type="number"
-                min="0"
-                max={peerCount}
-                step="1"
-                value={freeRiderCount}
-                aria-label="Number of free rider peers"
-                onChange={(e) => {
-                  const count = Number(e.target.value);
-                  if (Number.isFinite(count)) {
-                    changeFreeRiderCount(
-                      Math.max(0, Math.min(peerCount, Math.floor(count))),
-                    );
-                  }
-                }}
-              />
-              <span>/</span>
-              <span>{peerCount}</span>
-            </div>
-            <p className="hint">Increasing this count sets peer uploads to 0× from the top down. Decreasing it restores them to 1× from the bottom up.</p>
-          </section>
-
-          <div className="two-col">
-            <div className="field">
-              <div className="field-head"><label htmlFor="regular">Regular slots kᵣ</label></div>
-              <input
-                id="regular"
-                type="number"
-                min="0"
-                max="14"
-                value={settings.regularSlots}
-                onChange={(e) => updateSetting('regularSlots', Number(e.target.value))}
-              />
-            </div>
-            <div className="field">
-              <div className="field-head"><label htmlFor="optimistic">Optimistic slots kₒ</label></div>
-              <input
-                id="optimistic"
-                type="number"
-                min="0"
-                max="14"
-                value={settings.optimisticSlots}
-                onChange={(e) => updateSetting('optimisticSlots', Number(e.target.value))}
-              />
-            </div>
-          </div>
-          <div className="field">
-            <div className="field-head"><label htmlFor="seed">Random seed</label></div>
-            <input
-              id="seed"
-              type="number"
-              min="0"
-              max="999999"
-              value={settings.seed}
-              onChange={(e) => updateSetting('seed', Number(e.target.value))}
-            />
-          </div>
-
-          <div className="divider" />
-          <h2 className="section-title">Reciprocity algorithms</h2>
-          <div className="algorithm-row">
-            <span className="strategy-dot" style={{ background: STRATEGY_COLOURS.prop }} />
-            <span className="strategy-row">
-              <span>
-                <strong>Proportional share</strong>
-              </span>
-            </span>
-          </div>
-          <div className="algorithm-row">
-            <span className="strategy-dot" style={{ background: STRATEGY_COLOURS.unchoke }} />
-            <span className="strategy-row">
-              <span>
-                <strong>Reciprocity based on unchoking</strong>
-              </span>
-            </span>
-          </div>
-          {error && <div className="error" role="alert">{error}</div>}
-          <button className="run-button" type="button" onClick={handleRunSimulation} disabled={isRunning}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m8 5 11 7-11 7z" />
-            </svg>
-            {isRunning ? 'Running…' : 'Run experiment'}
-          </button>
+          <h2 className="section-title">Swarm conditions</h2>
+          {numberField('peerCount', 'Initial leechers (plus one seeder)', 1, 59)}
+          {numberField('fileSizeMB', 'File size (MB)', 0.01, 1024, 0.01)}
+          {numberField('heterogeneity', 'Upload heterogeneity h', 0, 1, 0.05)}
+          {numberField('freeRiderRatio', 'Free-rider ratio', 0, 1, 0.05)}
+          <p className="hint">{Math.round(settings.peerCount * settings.freeRiderRatio)} free riders, sampled without replacement. Count rounds to the nearest whole peer.</p>
+          <div className="field"><label><input type="checkbox" checked={settings.churnEnabled}
+            onChange={(e) => update('churnEnabled', e.target.checked)} /> Enable churn</label></div>
+          {settings.churnEnabled && <>
+            {numberField('meanOnlineSeconds', 'Mean online duration (s)', 0.1, 100000, 0.1)}
+            {numberField('meanOfflineSeconds', 'Mean offline duration (s)', 0.1, 100000, 0.1)}
+          </>}
+          <h2 className="section-title">Policies</h2>
+          {numberField('alphaS', 'Hybrid selection reciprocity αₛ', 0, 1, 0.25)}
+          {numberField('alphaB', 'Hybrid allocation reciprocity αᵦ', 0, 1, 0.05)}
+          <p className="hint">Hybrid uses four slots and δ = 2 Mbps. Proportional sharing serves all eligible receivers.</p>
+          {numberField('seed', 'Random seed', 0, 4294967295)}
+          <button className="run-button" disabled={isRunning} onClick={run}>Run comparison</button>
+          {isRunning && <><p role="status">Running simulation…</p><button onClick={cancel}>Cancel</button></>}
         </aside>
-
         <main className="main">
-          <section className="panel intro">
-            <div>
-              <h2>Swarm completion</h2>
-              <p>Comparing completion time depending on reciprocity algorithm.</p>
-            </div>
-            <div className="run-meta">
-              {experiment ? (
-                <>
-                  <br />
-                  {experiment.network.peerIds.length} peers · {experiment.network.freeRiderIds.length} free riders · {experiment.network.seedIds.length} seeds · {experiment.durationMinutes} min · seed {experiment.seed}
-                </>
-              ) : (
-                <><br />Set parameters and run</>
-              )}
-            </div>
+          <section className="panel intro"><div>
+            <h2>Swarm completion</h2>
+            <p>{experiment ? `${experiment.network.peerIds.length} leechers · ${experiment.network.freeRiderIds.length} free riders · seed ${experiment.seed}` : 'Set conditions and run a comparison.'}</p>
+          </div>
+          <div className="intro-actions">
+            <input ref={importInput} type="file" accept=".json,application/json" hidden onChange={importComparison} />
+            <button className="small-button" onClick={() => importInput.current.click()}>Import JSON</button>
+            {experiment && <button className="small-button" onClick={() => download(experiment, 'comparison.json')}>Export comparison</button>}
+          </div>
           </section>
-
           <section className="panel table-panel">
-            <div className="table-head">
-              <h3>End-of-run results</h3>
-              <span>
-                {experiment
-                  ? `${experiment.network.fileSizeMB} MB file · ${experiment.network.pieceCount} pieces at 256 KiB`
-                  : ''}
-              </span>
-            </div>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Reciprocity algorithm</th>
-                    <th>Average completion</th>
-                    <th>Completed peers</th>
-                    <th>First peer finish time</th>
-                    <th>Last peer finish time</th>
-                    <th>Mean finish time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.map((result) => (
-                    <tr key={result.strategy}>
-                      <td>
-                        <span
-                          className="strategy-dot"
-                          style={{ background: STRATEGY_COLOURS[result.strategy] }}
-                        />
-                        {STRATEGY_NAMES[result.strategy]}
-                      </td>
-                      <td>{formatNumber(result.finalCompletion, 1)}%</td>
-                      <td>{result.completed} / {result.peerCount}</td>
-                      <td>{formatFinishTime(result.firstFinishMinutes)}</td>
-                      <td>{formatFinishTime(result.lastFinishMinutes)}</td>
-                      <td>
-                        {result.meanFinishMinutes === null
-                          ? '—'
-                          : `${formatNumber(result.meanFinishMinutes, 1)} min (${result.finishedTimesCount})`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <div className="table-head"><h3>Comparison results</h3><span>Times measured from the start of the run</span></div>
+            <div className="table-scroll"><table>
+              <thead><tr><th>Policy</th><th>Mean downloaded</th><th>Completed</th><th>First finish</th><th>Full swarm finish</th><th>Mean finish (completed only)</th><th>Stopped at</th></tr></thead>
+              <tbody>{results.map((r) => <tr key={r.strategy}>
+                <td>{STRATEGY_NAMES[r.strategy]}</td><td>{formatNumber(r.finalCompletion, 1)}%</td>
+                <td>{r.completed}/{r.peerCount} ({formatNumber(r.completionFraction * 100, 1)}%)</td>
+                <td>{formatFinishTime(r.firstFinishMinutes === null ? null : r.firstFinishMinutes * 60)}</td>
+                <td>{formatFinishTime(r.swarmFinishSeconds)}</td>
+                <td>{formatFinishTime(r.meanFinishMinutes === null ? null : r.meanFinishMinutes * 60)} ({r.finishedTimesCount})</td>
+                <td>{formatFinishTime(r.elapsedSeconds)} · {r.termination}</td>
+              </tr>)}</tbody>
+            </table></div>
           </section>
-
           <div className="chart-grid">
-            <ChartPanel
-              experiment={experiment}
-              results={results}
-              chartType="completion"
-              title="Average swarm completion vs time"
-              description="Mean time for peers to download the entire file"
-            />
-            <ChartPanel
-              experiment={experiment}
-              results={results}
-              chartType="completed"
-              title="Completed peers vs time"
-              description="Number of peers that have downloaded the entire file"
-            />
+            <ChartPanel experiment={experiment} results={results} chartType="completion" title="Mean downloaded percentage" description="Average fraction of file data held by initial leechers." />
+            <ChartPanel experiment={experiment} results={results} chartType="completed" title="Completed initial leechers" description="Peers holding the entire file; includes peers currently offline." />
           </div>
-
-          <div className="note">
-            <strong>Model assumptions.</strong> The file is split into 256 KiB pieces, with a shorter final piece if required. Seeds start with all the pieces, peers start with no pieces. All nodes have a base 20 mbps upload rate and 100 mbps download rate which is scaled with their multipliers. Peers can only upload pieces that they own or have completely downloaded, using the rarest first rule, and they can only upload to neighbours who still need pieces. Each step simulates 10 seconds. The model assumes a fixed number of nodes and does not account for new arrivals, departures, or network behaviour. 
-          </div>
+          <div className="note"><strong>Model assumptions.</strong> Complete graph; one permanent initial seeder at 20 Mbps.
+            Leecher upload capacities are sampled once from 20 × U(1−h, 1+h) Mbps; download caps are 100 Mbps.
+            Free riders never upload, including after completion. All peers start online; exponential churn preserves data.
+            Pieces are 256 KiB (with a shorter final piece), rarest first, with one sender per receiver–piece pair.
+            Only complete pieces can be uploaded. Download limits scale desired rates proportionally; unused allocations are not redistributed.
+            Slot selections persist until invalid and refill only at selection rounds. Seeders use random selection and equal allocation.
+            Contributions count useful bytes over the configured window. Completed peers remain in the swarm subject to churn.
+            A dash for full-swarm finish means at least one peer did not finish before the deadline.</div>
         </main>
       </div>
     </div>
   );
 }
-
 export default App;

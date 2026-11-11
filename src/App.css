@@ -387,13 +387,6 @@ input[type="range"] {
   line-height: 1.45;
 }
 
-.error {
-  margin: 8px 0 0;
-  color: #bd3c3c;
-  font-size: 11px;
-  white-space: pre-wrap;
-}
-
 .run-button {
   display: flex;
   align-items: center;
@@ -440,6 +433,11 @@ input[type="range"] {
   margin-bottom: 13px;
   padding: 16px 19px;
   border-left: 3px solid #437b2b;
+}
+
+.intro-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .intro h2 {
