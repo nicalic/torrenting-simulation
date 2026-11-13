@@ -1,0 +1,24 @@
+{
+  "fixed": {
+    "initialSeeders": 1,
+    "initialLeechers": 30,
+    "fileBytes": 104857600,
+    "stepSeconds": 0.1,
+    "selectionIntervalSeconds": 10,
+    "contributionWindowSeconds": 20,
+    "timeLimitSeconds": 180,
+    "regularSlots": 3,
+    "optimisticSlots": 1
+  },
+  "swarmFactors": {
+    "heterogeneity": [0, 0.5, 0.8],
+    "churn": { "meanOnlineSeconds": 120, "meanOfflineSeconds": 30 },
+    "freeRiderCounts": [0, 6, 12, 18]
+  },
+  "alphas": [0, 0.25, 0.5, 0.75, 1],
+  "mainSeeds": [
+    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+    2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019,
+    2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029
+  ]
+}
