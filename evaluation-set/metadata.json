@@ -7,7 +7,7 @@
       "unchoke",
       "hybrid"
     ],
-    "node_version": "v24.14.1",
+    "node_version": "v20.19.5",
     "fixed": {
       "initialSeeders": 1,
       "initialLeechers": 30,
@@ -225,36 +225,26 @@
       }
     ],
     "seeds": [
-      2000,
-      2001,
-      2002,
-      2003,
-      2004,
-      2005,
-      2006,
-      2007,
-      2008,
-      2009,
-      2010,
-      2011,
-      2012,
-      2013,
-      2014,
-      2015,
-      2016,
-      2017,
-      2018,
-      2019,
-      2020,
-      2021,
-      2022,
-      2023,
-      2024,
-      2025,
-      2026,
-      2027,
-      2028,
-      2029
+      4000,
+      4001,
+      4002,
+      4003,
+      4004,
+      4005,
+      4006,
+      4007,
+      4008,
+      4009,
+      4010,
+      4011,
+      4012,
+      4013,
+      4014,
+      4015,
+      4016,
+      4017,
+      4018,
+      4019
     ],
     "settings": [
       {
@@ -274,115 +264,211 @@
         "regularSlots": 3
       },
       {
+        "policy": "hybrid",
         "sweep": "shared",
         "alpha": 0,
         "alphaS": 0,
         "alphaB": 0,
-        "policy": "hybrid",
         "regularSlots": 0
       },
       {
-        "sweep": "selection-only",
-        "alpha": 0.25,
-        "alphaS": 0.25,
-        "alphaB": 0,
         "policy": "hybrid",
-        "regularSlots": 1
-      },
-      {
         "sweep": "allocation-only",
         "alpha": 0.25,
         "alphaS": 0,
         "alphaB": 0.25,
-        "policy": "hybrid",
         "regularSlots": 0
       },
       {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 0.5,
+        "alphaS": 0,
+        "alphaB": 0.5,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 0.75,
+        "alphaS": 0,
+        "alphaB": 0.75,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 1,
+        "alphaS": 0,
+        "alphaB": 1,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "selection-only",
+        "alpha": 0.25,
+        "alphaS": 0.25,
+        "alphaB": 0,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
         "sweep": "combined",
         "alpha": 0.25,
         "alphaS": 0.25,
         "alphaB": 0.25,
-        "policy": "hybrid",
         "regularSlots": 1
       },
       {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 0.5,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 0.75,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 1,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
         "sweep": "selection-only",
         "alpha": 0.5,
         "alphaS": 0.5,
         "alphaB": 0,
-        "policy": "hybrid",
         "regularSlots": 2
       },
       {
-        "sweep": "allocation-only",
-        "alpha": 0.5,
-        "alphaS": 0,
-        "alphaB": 0.5,
         "policy": "hybrid",
-        "regularSlots": 0
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 0.25,
+        "regularSlots": 2
       },
       {
+        "policy": "hybrid",
         "sweep": "combined",
         "alpha": 0.5,
         "alphaS": 0.5,
         "alphaB": 0.5,
-        "policy": "hybrid",
         "regularSlots": 2
       },
       {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 0.75,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 1,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
         "sweep": "selection-only",
         "alpha": 0.75,
         "alphaS": 0.75,
         "alphaB": 0,
-        "policy": "hybrid",
         "regularSlots": 3
       },
       {
-        "sweep": "allocation-only",
-        "alpha": 0.75,
-        "alphaS": 0,
-        "alphaB": 0.75,
         "policy": "hybrid",
-        "regularSlots": 0
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 0.25,
+        "regularSlots": 3
       },
       {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 0.5,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
         "sweep": "combined",
         "alpha": 0.75,
         "alphaS": 0.75,
         "alphaB": 0.75,
-        "policy": "hybrid",
         "regularSlots": 3
       },
       {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 1,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
         "sweep": "selection-only",
         "alpha": 1,
         "alphaS": 1,
         "alphaB": 0,
-        "policy": "hybrid",
         "regularSlots": 4
       },
       {
-        "sweep": "allocation-only",
-        "alpha": 1,
-        "alphaS": 0,
-        "alphaB": 1,
         "policy": "hybrid",
-        "regularSlots": 0
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.25,
+        "regularSlots": 4
       },
       {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.5,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.75,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
         "sweep": "combined",
         "alpha": 1,
         "alphaS": 1,
         "alphaB": 1,
-        "policy": "hybrid",
         "regularSlots": 4
       }
     ],
-    "expected_runs": 10800
+    "expected_runs": 12960
   },
   "complete": true,
-  "workers": 4,
-  "wall_seconds": 3972.7116114999994,
-  "run_count": 10800,
-  "peer_count": 324000
+  "workers": 5,
+  "wall_seconds": 9099.40375175,
+  "run_count": 12960,
+  "peer_count": 388800
 }

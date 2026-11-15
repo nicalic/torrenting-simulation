@@ -1,0 +1,3 @@
+criterion,alpha_s,alpha_b,restricted_mean_s,mean_finish_fraction
+lowest_restricted_mean,0.75,1,90.50951,0.9814583
+highest_completion_rate_then_fastest,0.25,1,91.08974,0.9846528

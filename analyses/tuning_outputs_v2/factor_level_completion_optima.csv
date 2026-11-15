@@ -1,0 +1,10 @@
+factor,level,alpha_s,alpha_b,completion_rate,restricted_mean_s
+heterogeneity,0.0,0.75,0.5,0.986875,89.66265
+heterogeneity,0.5,0.25,1,0.98625,90.88075
+heterogeneity,0.8,0.75,0.75,0.983125,92.74733
+churn_enabled,False,0.5,0.75,1,84.22206
+churn_enabled,True,0.25,1,0.9693056,96.66312
+free_rider_ratio,0.0,1,1,0.9958333,63.63656
+free_rider_ratio,0.2,0.75,0,0.995,74.15236
+free_rider_ratio,0.4,0.25,1,0.9883333,93.43014
+free_rider_ratio,0.6,0.25,1,0.9611111,131.4427

@@ -1,0 +1,64 @@
+{
+  "fixed": {
+    "initialSeeders": 1,
+    "initialLeechers": 30,
+    "fileBytes": 104857600,
+    "stepSeconds": 0.1,
+    "selectionIntervalSeconds": 10,
+    "contributionWindowSeconds": 20,
+    "timeLimitSeconds": 180,
+    "regularSlots": 3,
+    "optimisticSlots": 1
+  },
+  "swarmFactors": {
+    "heterogeneity": [
+      0,
+      0.5,
+      0.8
+    ],
+    "churn": {
+      "meanOnlineSeconds": 120,
+      "meanOfflineSeconds": 30
+    },
+    "freeRiderCounts": [
+      0,
+      6,
+      12,
+      18
+    ]
+  },
+  "policies": [
+    "prop",
+    "unchoke",
+    "hybrid"
+  ],
+  "alphas": [
+    0,
+    0.25,
+    0.5,
+    0.75,
+    1
+  ],
+  "mainSeeds": [
+    4000,
+    4001,
+    4002,
+    4003,
+    4004,
+    4005,
+    4006,
+    4007,
+    4008,
+    4009,
+    4010,
+    4011,
+    4012,
+    4013,
+    4014,
+    4015,
+    4016,
+    4017,
+    4018,
+    4019
+  ]
+}
