@@ -8,8 +8,14 @@ import {
   BASE_DOWNLOAD_MBPS, BASE_UPLOAD_MBPS, PIECE_SIZE_MB, runExperiment,
 } from '../src/simulator.js';
 
+const cli = isMainThread ? parseArgs({ options: {
+  out: { type: 'string' },
+  config: { type: 'string' },
+  workers: { type: 'string', default: String(Math.max(1, Math.floor(availableParallelism() / 2))) },
+  help: { type: 'boolean', short: 'h' },
+} }).values : null;
 const study = isMainThread
-  ? JSON.parse(await readFile(new URL('./config.json', import.meta.url), 'utf8'))
+  ? JSON.parse(await readFile(cli.config ?? new URL('./config.json', import.meta.url), 'utf8'))
   : workerData.study;
 const pieceBytes = PIECE_SIZE_MB * 1e6;
 const pieceCount = Math.ceil(study.fixed.fileBytes / pieceBytes);
@@ -58,6 +64,16 @@ for (const heterogeneity of factors.heterogeneity) {
   }
 }
 
+// Reference policies (propshare, unchoke-based reciprocity) run once per seed with
+// no alpha; the hybrid model is swept over alpha_s / alpha_b.
+const POLICIES = study.policies ?? ['prop', 'unchoke', 'hybrid'];
+const REFERENCE_SETTINGS = {
+  prop: { policy: 'prop', sweep: 'reference', alpha: null, alphaS: null, alphaB: null, regularSlots: null },
+  unchoke: {
+    policy: 'unchoke', sweep: 'reference', alpha: null, alphaS: null, alphaB: null,
+    regularSlots: FIXED.regularSlots,
+  },
+};
 const HYBRID_SETTINGS = [
   { sweep: 'shared', alpha: 0, alphaS: 0, alphaB: 0 },
   ...study.alphas.filter(alpha => alpha !== 0).flatMap(alpha => [
@@ -65,7 +81,12 @@ const HYBRID_SETTINGS = [
     { sweep: 'allocation-only', alpha, alphaS: 0, alphaB: alpha },
     { sweep: 'combined', alpha, alphaS: alpha, alphaB: alpha },
   ]),
-].map(setting => ({ ...setting, policy: 'hybrid' }));
+].map(setting => ({ ...setting, policy: 'hybrid', regularSlots: FIXED.hybridUploadSlots * setting.alphaS }));
+const SETTINGS = POLICIES.flatMap(policy => {
+  if (policy === 'hybrid') return HYBRID_SETTINGS;
+  if (REFERENCE_SETTINGS[policy]) return [REFERENCE_SETTINGS[policy]];
+  throw new Error(`Unknown policy in config: ${policy}`);
+});
 const RUN_FIELDS = [
   'run_id', 'condition', 'condition_label', 'seed', 'policy', 'sweep', 'alpha', 'alpha_s', 'alpha_b',
   'regular_slots', 'heterogeneity', 'churn_enabled', 'mean_online_s', 'mean_offline_s',
@@ -97,8 +118,10 @@ async function writeResults(out, results) {
   await writeAtomic(join(out, 'peers.csv'), encodeCsv(PEER_FIELDS, results.flatMap(result => result.peers)));
 }
 
-function formatResult(scenario, seed, { policy, sweep, alpha, alphaS, alphaB }, result, shared) {
-  const runId = `${scenario.id}:${seed}:${policy}:${alphaS}:${alphaB}`;
+function formatResult(scenario, seed, { policy, sweep, alpha, alphaS, alphaB, regularSlots }, result, shared) {
+  const runId = policy === 'hybrid'
+    ? `${scenario.id}:${seed}:${policy}:${alphaS}:${alphaB}`
+    : `${scenario.id}:${seed}:${policy}`;
   const peers = shared.peers.map((peer, index) => ({
     run_id: runId, ...peer, completion_time_s: result.completionTimesSeconds[index],
   }));
@@ -107,7 +130,7 @@ function formatResult(scenario, seed, { policy, sweep, alpha, alphaS, alphaB }, 
     run: {
       run_id: runId, condition: scenario.id, condition_label: scenario.label, seed, policy,
       sweep, alpha, alpha_s: alphaS, alpha_b: alphaB,
-      regular_slots: FIXED.hybridUploadSlots * alphaS,
+      regular_slots: regularSlots,
       heterogeneity: scenario.heterogeneity, churn_enabled: scenario.meanOnlineSeconds !== null,
       mean_online_s: scenario.meanOnlineSeconds, mean_offline_s: scenario.meanOfflineSeconds,
       initial_online_probability: FIXED.churnInitialOnlineProbability,
@@ -126,11 +149,14 @@ function formatResult(scenario, seed, { policy, sweep, alpha, alphaS, alphaB }, 
 function runSeed({ scenario, seed }) {
   const config = {
     ...FIXED, ...scenario, seed, nodeConfigs: NODE_CONFIGS,
-    churnEnabled: scenario.meanOnlineSeconds !== null, strategies: ['hybrid'],
+    churnEnabled: scenario.meanOnlineSeconds !== null,
   };
   let inputs;
-  const outcomes = HYBRID_SETTINGS.map(({ alphaS, alphaB }) => {
-    const experiment = runExperiment({ ...config, alphaS, alphaB, experimentalInputs: inputs });
+  // Every policy in a seed shares the same sampled peers, free riders, and churn schedule.
+  const outcomes = SETTINGS.map(({ policy, alphaS, alphaB }) => {
+    const experiment = runExperiment({
+      ...config, strategies: [policy], alphaS, alphaB, experimentalInputs: inputs,
+    });
     inputs ??= experiment.inputs;
     return experiment.results[0];
   });
@@ -145,7 +171,7 @@ function runSeed({ scenario, seed }) {
     }];
   });
   const shared = { peers, sha256: createHash('sha256').update(JSON.stringify(inputs)).digest('hex') };
-  return HYBRID_SETTINGS.map((setting, index) => formatResult(scenario, seed, setting, outcomes[index], shared));
+  return SETTINGS.map((setting, index) => formatResult(scenario, seed, setting, outcomes[index], shared));
 }
 
 function runWorker(task) {
@@ -158,12 +184,8 @@ function runWorker(task) {
 }
 
 async function main() {
-  const { values } = parseArgs({ options: {
-    out: { type: 'string' },
-    workers: { type: 'string', default: String(Math.max(1, Math.floor(availableParallelism() / 2))) },
-    help: { type: 'boolean', short: 'h' },
-  } });
-  const usage = 'Usage: node scripts/run-batch.js --out DIR [--workers N]';
+  const values = cli;
+  const usage = 'Usage: node scripts/run-batch.js --out DIR [--workers N] [--config FILE]';
   if (values.help) return console.log(usage);
   const workers = Number(values.workers);
   if (!values.out || !Number.isSafeInteger(workers) || workers < 1) throw new Error(usage);
@@ -171,10 +193,10 @@ async function main() {
   const out = values.out;
   const metadataPath = join(out, 'metadata.json');
   const design = {
-    schema_version: 1, mode: 'main',
+    schema_version: 2, mode: 'main', policies: POLICIES,
     node_version: process.version,
-    fixed: FIXED, conditions: CONDITIONS, seeds: study.mainSeeds, settings: HYBRID_SETTINGS,
-    expected_runs: CONDITIONS.length * study.mainSeeds.length * HYBRID_SETTINGS.length,
+    fixed: FIXED, conditions: CONDITIONS, seeds: study.mainSeeds, settings: SETTINGS,
+    expected_runs: CONDITIONS.length * study.mainSeeds.length * SETTINGS.length,
   };
   await mkdir(out, { recursive: true });
   await writeFile(metadataPath, JSON.stringify({ design, complete: false }, null, 2) + '\n', { flag: 'wx' });
