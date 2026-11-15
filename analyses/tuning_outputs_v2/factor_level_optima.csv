@@ -1,0 +1,10 @@
+factor,level,alpha_s,alpha_b,capped_mean_s
+heterogeneity,0.0,0.75,1,88.70021
+heterogeneity,0.5,0.5,0.5,89.88015
+heterogeneity,0.8,0.75,0,91.71115
+churn_enabled,False,0.5,0.75,84.22206
+churn_enabled,True,0.75,1,96.20788
+free_rider_ratio,0.0,1,0.25,63.58636
+free_rider_ratio,0.2,1,1,73.43458
+free_rider_ratio,0.4,0.5,0,93.31814
+free_rider_ratio,0.6,0.5,0.5,128.8024

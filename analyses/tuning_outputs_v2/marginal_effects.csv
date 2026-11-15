@@ -1,0 +1,11 @@
+parameter,level,capped_mean_s
+alpha_s,0,92.8656
+alpha_s,0.25,91.41169
+alpha_s,0.5,90.88712
+alpha_s,0.75,90.86113
+alpha_s,1,91.50806
+alpha_b,0,91.58626
+alpha_b,0.25,91.47115
+alpha_b,0.5,91.46769
+alpha_b,0.75,91.48304
+alpha_b,1,91.52546

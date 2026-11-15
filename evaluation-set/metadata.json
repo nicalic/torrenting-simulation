@@ -1,0 +1,474 @@
+{
+  "design": {
+    "schema_version": 2,
+    "mode": "main",
+    "policies": [
+      "prop",
+      "unchoke",
+      "hybrid"
+    ],
+    "node_version": "v20.19.5",
+    "fixed": {
+      "initialSeeders": 1,
+      "initialLeechers": 30,
+      "fileBytes": 104857600,
+      "stepSeconds": 0.1,
+      "selectionIntervalSeconds": 10,
+      "contributionWindowSeconds": 20,
+      "timeLimitSeconds": 180,
+      "regularSlots": 3,
+      "optimisticSlots": 1,
+      "fileSizeMB": 104.85759999999999,
+      "pieceBytes": 262144,
+      "pieceCount": 400,
+      "hybridUploadSlots": 4,
+      "hybridRegularSlots": "4 * alpha_s",
+      "deltaMbps": 2,
+      "seedUploadMbps": 20,
+      "baseLeecherUploadMbps": 20,
+      "downloadMbps": 100,
+      "churnModel": "per-step Bernoulli",
+      "churnInitialOnlineProbability": 1
+    },
+    "conditions": [
+      {
+        "id": "baseline",
+        "label": "Baseline",
+        "heterogeneity": 0,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "free-0.2",
+        "label": "Free riders: 20%",
+        "heterogeneity": 0,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "free-0.4",
+        "label": "Free riders: 40%",
+        "heterogeneity": 0,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "free-0.6",
+        "label": "Free riders: 60%",
+        "heterogeneity": 0,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "churn-low",
+        "label": "Low churn",
+        "heterogeneity": 0,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "churn-low+free-0.2",
+        "label": "Low churn · Free riders: 20%",
+        "heterogeneity": 0,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "churn-low+free-0.4",
+        "label": "Low churn · Free riders: 40%",
+        "heterogeneity": 0,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "churn-low+free-0.6",
+        "label": "Low churn · Free riders: 60%",
+        "heterogeneity": 0,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.5",
+        "label": "Upload h = 0.5",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.5+free-0.2",
+        "label": "Upload h = 0.5 · Free riders: 20%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.5+free-0.4",
+        "label": "Upload h = 0.5 · Free riders: 40%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.5+free-0.6",
+        "label": "Upload h = 0.5 · Free riders: 60%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.5+churn-low",
+        "label": "Upload h = 0.5 · Low churn",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.5+churn-low+free-0.2",
+        "label": "Upload h = 0.5 · Low churn · Free riders: 20%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.5+churn-low+free-0.4",
+        "label": "Upload h = 0.5 · Low churn · Free riders: 40%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.5+churn-low+free-0.6",
+        "label": "Upload h = 0.5 · Low churn · Free riders: 60%",
+        "heterogeneity": 0.5,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.8",
+        "label": "Upload h = 0.8",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.8+free-0.2",
+        "label": "Upload h = 0.8 · Free riders: 20%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.8+free-0.4",
+        "label": "Upload h = 0.8 · Free riders: 40%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.8+free-0.6",
+        "label": "Upload h = 0.8 · Free riders: 60%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": null,
+        "meanOfflineSeconds": null
+      },
+      {
+        "id": "h-0.8+churn-low",
+        "label": "Upload h = 0.8 · Low churn",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 0,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.8+churn-low+free-0.2",
+        "label": "Upload h = 0.8 · Low churn · Free riders: 20%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 6,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.8+churn-low+free-0.4",
+        "label": "Upload h = 0.8 · Low churn · Free riders: 40%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 12,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      },
+      {
+        "id": "h-0.8+churn-low+free-0.6",
+        "label": "Upload h = 0.8 · Low churn · Free riders: 60%",
+        "heterogeneity": 0.8,
+        "freeRiderCount": 18,
+        "meanOnlineSeconds": 120,
+        "meanOfflineSeconds": 30
+      }
+    ],
+    "seeds": [
+      4000,
+      4001,
+      4002,
+      4003,
+      4004,
+      4005,
+      4006,
+      4007,
+      4008,
+      4009,
+      4010,
+      4011,
+      4012,
+      4013,
+      4014,
+      4015,
+      4016,
+      4017,
+      4018,
+      4019
+    ],
+    "settings": [
+      {
+        "policy": "prop",
+        "sweep": "reference",
+        "alpha": null,
+        "alphaS": null,
+        "alphaB": null,
+        "regularSlots": null
+      },
+      {
+        "policy": "unchoke",
+        "sweep": "reference",
+        "alpha": null,
+        "alphaS": null,
+        "alphaB": null,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "shared",
+        "alpha": 0,
+        "alphaS": 0,
+        "alphaB": 0,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 0.25,
+        "alphaS": 0,
+        "alphaB": 0.25,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 0.5,
+        "alphaS": 0,
+        "alphaB": 0.5,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 0.75,
+        "alphaS": 0,
+        "alphaB": 0.75,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "allocation-only",
+        "alpha": 1,
+        "alphaS": 0,
+        "alphaB": 1,
+        "regularSlots": 0
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "selection-only",
+        "alpha": 0.25,
+        "alphaS": 0.25,
+        "alphaB": 0,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "combined",
+        "alpha": 0.25,
+        "alphaS": 0.25,
+        "alphaB": 0.25,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 0.5,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 0.75,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.25,
+        "alphaB": 1,
+        "regularSlots": 1
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "selection-only",
+        "alpha": 0.5,
+        "alphaS": 0.5,
+        "alphaB": 0,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 0.25,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "combined",
+        "alpha": 0.5,
+        "alphaS": 0.5,
+        "alphaB": 0.5,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 0.75,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.5,
+        "alphaB": 1,
+        "regularSlots": 2
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "selection-only",
+        "alpha": 0.75,
+        "alphaS": 0.75,
+        "alphaB": 0,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 0.25,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 0.5,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "combined",
+        "alpha": 0.75,
+        "alphaS": 0.75,
+        "alphaB": 0.75,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 0.75,
+        "alphaB": 1,
+        "regularSlots": 3
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "selection-only",
+        "alpha": 1,
+        "alphaS": 1,
+        "alphaB": 0,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.25,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.5,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "mixed",
+        "alpha": null,
+        "alphaS": 1,
+        "alphaB": 0.75,
+        "regularSlots": 4
+      },
+      {
+        "policy": "hybrid",
+        "sweep": "combined",
+        "alpha": 1,
+        "alphaS": 1,
+        "alphaB": 1,
+        "regularSlots": 4
+      }
+    ],
+    "expected_runs": 12960
+  },
+  "complete": true,
+  "workers": 5,
+  "wall_seconds": 9099.40375175,
+  "run_count": 12960,
+  "peer_count": 388800
+}

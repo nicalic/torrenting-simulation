@@ -2,18 +2,22 @@ import { BASE_UPLOAD_MBPS, BASE_DOWNLOAD_MBPS, PIECE_SIZE_MB } from './constants
 import { createRandomStreams } from './random.js';
 
 export const createChurnSchedule = (nodeConfigs, seed, timeLimitSeconds, {
-  churnEnabled = false, meanOnlineSeconds = 300, meanOfflineSeconds = 30,
+  churnEnabled = false, meanOnlineSeconds = 300, meanOfflineSeconds = 30, stepSeconds = 0.1,
 } = {}) => {
   const random = createRandomStreams(seed).churn;
+  const numberOfSteps = Math.round(timeLimitSeconds / stepSeconds);
+  const disconnectProbability = stepSeconds / meanOnlineSeconds;
+  const reconnectProbability = stepSeconds / meanOfflineSeconds;
   return nodeConfigs.map((node) => {
     const events = [];
     if (!churnEnabled || node.role === 'seed') return events;
-    let time = 0;
     let online = true;
-    while (time < timeLimitSeconds) {
-      time += -Math.log(1 - random()) * (online ? meanOnlineSeconds : meanOfflineSeconds);
-      online = !online;
-      if (time < timeLimitSeconds) events.push({ time, online });
+    // The first interval starts online. Each later interval can start with one transition.
+    for (let step = 1; step < numberOfSteps; step += 1) {
+      if (random() < (online ? disconnectProbability : reconnectProbability)) {
+        online = !online;
+        events.push({ time: step * stepSeconds, online });
+      }
     }
     return events;
   });

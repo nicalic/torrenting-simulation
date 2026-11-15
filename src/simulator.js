@@ -14,7 +14,7 @@ export const runExperiment = ({
   experimentalInputs,
   onStep,
   strategies = ['hybrid', 'prop', 'unchoke'],
-  durationMinutes = 30,
+  durationMinutes = 3,
   fileSizeMB,
   regularSlots = 3,
   optimisticSlots = 1,
@@ -38,7 +38,7 @@ export const runExperiment = ({
   const inputs = experimentalInputs ?? createExperimentalInputs(nodeConfigs, seed, { heterogeneity, freeRiderCount });
   if (!experimentalInputs) {
     inputs.churnSchedule = createChurnSchedule(inputs.nodeConfigs, seed, timeLimitSeconds, {
-      churnEnabled, meanOnlineSeconds, meanOfflineSeconds,
+      churnEnabled, meanOnlineSeconds, meanOfflineSeconds, stepSeconds,
     });
   }
   const network = makeNetwork(inputs.nodeConfigs, fileSizeMB);
