@@ -74,14 +74,27 @@ const REFERENCE_SETTINGS = {
     regularSlots: FIXED.regularSlots,
   },
 };
-const HYBRID_SETTINGS = [
-  { sweep: 'shared', alpha: 0, alphaS: 0, alphaB: 0 },
-  ...study.alphas.filter(alpha => alpha !== 0).flatMap(alpha => [
-    { sweep: 'selection-only', alpha, alphaS: alpha, alphaB: 0 },
-    { sweep: 'allocation-only', alpha, alphaS: 0, alphaB: alpha },
-    { sweep: 'combined', alpha, alphaS: alpha, alphaB: alpha },
-  ]),
-].map(setting => ({ ...setting, policy: 'hybrid', regularSlots: FIXED.hybridUploadSlots * setting.alphaS }));
+const HYBRID_SETTINGS = [];
+for (const alphaS of study.alphas) {
+  for (const alphaB of study.alphas) {
+    let sweep = 'mixed';
+    let alpha = null;
+    if (alphaS === alphaB) {
+      sweep = alphaS === 0 ? 'shared' : 'combined';
+      alpha = alphaS;
+    } else if (alphaB === 0) {
+      sweep = 'selection-only';
+      alpha = alphaS;
+    } else if (alphaS === 0) {
+      sweep = 'allocation-only';
+      alpha = alphaB;
+    }
+    HYBRID_SETTINGS.push({
+      policy: 'hybrid', sweep, alpha, alphaS, alphaB,
+      regularSlots: FIXED.hybridUploadSlots * alphaS,
+    });
+  }
+}
 const SETTINGS = POLICIES.flatMap(policy => {
   if (policy === 'hybrid') return HYBRID_SETTINGS;
   if (REFERENCE_SETTINGS[policy]) return [REFERENCE_SETTINGS[policy]];
