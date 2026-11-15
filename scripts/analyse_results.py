@@ -15,7 +15,9 @@ Requires pandas, numpy, matplotlib and scipy.
 """
 import argparse
 import json
+import os
 import sys
+import time
 from pathlib import Path
 
 import matplotlib
@@ -165,9 +167,21 @@ def churn_text(churn):
 
 
 def save(fig, out, name, fmt):
+    """Render to a temporary file, then swap it into place. On Windows an image viewer, indexer or
+    antivirus scan can briefly hold an existing figure open, so retry the swap for a few seconds."""
     path = out / f"{name}.{fmt}"
-    fig.savefig(path, dpi=200, bbox_inches="tight")
+    temp = out / f".{name}.{os.getpid()}.tmp.{fmt}"
+    fig.savefig(temp, dpi=200, bbox_inches="tight")
     plt.close(fig)
+    for attempt in range(20):
+        try:
+            os.replace(temp, path)
+            break
+        except OSError:
+            if attempt == 19:
+                temp.unlink(missing_ok=True)
+                raise
+            time.sleep(0.25)
     print(f"  {path}")
 
 
@@ -302,6 +316,35 @@ def fig_scatter(peers, cmp, models, deadline, hybrid_name):
     return fig
 
 
+def draw_sweep(ax, runs, hyb, condition):
+    """One panel of the hybrid alpha sweep: three sweep lines (sharing the alpha = 0 point) and
+    dashed reference lines for propshare and unchoke."""
+    shared = hyb[hyb.sweep.eq("shared") & (hyb.condition == condition)]
+    for sweep in SWEEP_ORDER:
+        d = pd.concat([shared, hyb[(hyb.condition == condition) & hyb.sweep.eq(sweep)]])
+        s = summarise(d.assign(a=d.alpha.fillna(0)), ["a"], "mean_t").sort_values("a")
+        st = SWEEP_STYLES[sweep]
+        ax.fill_between(s.a, s["mean"] - s.ci, s["mean"] + s.ci, color=st["color"], alpha=0.07, lw=0)
+        ax.plot(s.a, s["mean"], color=st["color"], marker=st["marker"], markeredgecolor=SURFACE,
+                markeredgewidth=0.8)
+    for m in ("prop", "unchoke"):
+        ref = runs[(runs.condition == condition) & runs.policy.eq(m)].mean_t
+        if not ref.empty:  # identified by the legend; in-panel labels collided with the sweep lines
+            ax.axhline(ref.mean(), color=MODEL_COLOURS[m], lw=1.4, ls=(0, (4, 2)))
+    alphas = sorted(hyb.alpha.dropna().unique())
+    ax.set_xticks(alphas, [f"{a:g}" for a in alphas])
+
+
+def sweep_handles(models):
+    handles = [Line2D([], [], color=SWEEP_STYLES[s]["color"], marker=SWEEP_STYLES[s]["marker"],
+                      label=f"Hybrid {s}") for s in SWEEP_ORDER]
+    return handles + [Line2D([], [], color=MODEL_COLOURS[m], ls=(0, (4, 2)), label=MODEL_NAMES[m])
+                      for m in ("prop", "unchoke") if m in models]
+
+
+SWEEP_SUBTITLE = r"Selection-only varies $\alpha_s$, allocation-only varies $\alpha_b$, combined varies both"
+
+
 def fig_hybrid_sweep(runs, order, models):
     hyb = runs[runs.policy.eq("hybrid")]
     if hyb.empty:
@@ -309,34 +352,206 @@ def fig_hybrid_sweep(runs, order, models):
     conds = key_conditions(order)
     fig, axes = plt.subplots(1, len(conds), squeeze=False, figsize=(3.4 * len(conds) + 0.4, 3.4),
                              layout="constrained")
-    shared = hyb[hyb.sweep.eq("shared")]
     for ax, cond in zip(axes[0], conds):
-        c = cond.condition
-        for sweep in SWEEP_ORDER:
-            d = pd.concat([shared[shared.condition == c], hyb[(hyb.condition == c) & hyb.sweep.eq(sweep)]])
-            s = summarise(d.assign(a=d.alpha.fillna(0)), ["a"], "mean_t").sort_values("a")
-            st = SWEEP_STYLES[sweep]
-            ax.fill_between(s.a, s["mean"] - s.ci, s["mean"] + s.ci, color=st["color"], alpha=0.07, lw=0)
-            ax.plot(s.a, s["mean"], color=st["color"], marker=st["marker"], markeredgecolor=SURFACE,
-                    markeredgewidth=0.8, label=f"Hybrid: {sweep}")
-        for m in ("prop", "unchoke"):
-            ref = runs[(runs.condition == c) & runs.policy.eq(m)].mean_t
-            if ref.empty:
-                continue
-            # Identified by the legend; in-panel labels collided with the sweep lines.
-            ax.axhline(ref.mean(), color=MODEL_COLOURS[m], lw=1.4, ls=(0, (4, 2)))
+        draw_sweep(ax, runs, hyb, cond.condition)
         ax.set_title(cond.condition_label, loc="left")
         ax.set_xlabel(r"$\alpha$")
-        ax.set_xticks(sorted(hyb.alpha.dropna().unique()))
     axes[0][0].set_ylabel("Mean completion time (s)")
-    handles = [Line2D([], [], color=SWEEP_STYLES[s]["color"], marker=SWEEP_STYLES[s]["marker"],
-                      label=f"Hybrid {s}") for s in SWEEP_ORDER]
-    handles += [Line2D([], [], color=MODEL_COLOURS[m], ls=(0, (4, 2)), label=MODEL_NAMES[m])
-                for m in ("prop", "unchoke") if m in models]
-    fig.suptitle(r"Hybrid $\alpha$ sweep against the reference policies (dashed)" "\n"
-                 r"Selection-only varies $\alpha_s$, allocation-only varies $\alpha_b$, combined varies both",
-                 x=0.01, ha="left")
+    fig.suptitle(r"Hybrid $\alpha$ sweep against the reference policies (dashed), selected conditions" "\n"
+                 + SWEEP_SUBTITLE, x=0.01, ha="left")
+    handles = sweep_handles(models)
     fig.legend(handles=handles, loc="outside lower center", ncol=len(handles))
+    return fig
+
+
+def fig_hybrid_sweep_grid(runs, order, models):
+    """The same sweep for every condition: rows are (churn, upload h), columns are free-rider shares.
+    Each panel has its own y-axis, because completion times differ several-fold between conditions."""
+    hyb = runs[runs.policy.eq("hybrid")]
+    if hyb.empty:
+        return None
+    row_keys = order[["churn_enabled", "heterogeneity"]].drop_duplicates().itertuples(index=False)
+    row_keys = list(row_keys)
+    fr_counts = sorted(order.free_rider_count.unique())
+    fr_pct = runs.drop_duplicates("free_rider_count").set_index("free_rider_count").free_rider_pct
+    fig, axes = plt.subplots(len(row_keys), len(fr_counts), squeeze=False, sharex=True,
+                             figsize=(3.1 * len(fr_counts) + 0.6, 2.3 * len(row_keys) + 1.2),
+                             layout="constrained")
+    for i, (churn, het) in enumerate(row_keys):
+        for j, fr in enumerate(fr_counts):
+            ax = axes[i][j]
+            cond = find_condition(order, churn, het, fr)
+            if cond is None:
+                ax.set_visible(False)
+                continue
+            draw_sweep(ax, runs, hyb, cond.condition)
+            if i == 0:
+                ax.set_title(f"{fr_pct[fr]}% free riders", loc="left")
+            if j == 0:
+                ax.set_ylabel(f"h = {het:g} · {churn_text(churn)}\nmean completion (s)")
+            if i == len(row_keys) - 1:
+                ax.set_xlabel(r"$\alpha$")
+    fig.suptitle(r"Hybrid $\alpha$ sweep in every condition, against the reference policies (dashed)" "\n"
+                 + SWEEP_SUBTITLE + "; each panel has its own y-axis", x=0.01, ha="left")
+    handles = sweep_handles(models)
+    fig.legend(handles=handles, loc="outside lower center", ncol=len(handles))
+    return fig
+
+
+# --------------------------------------------------------------------------- hybrid settings vs unchoke
+
+# metric: (axis label, how the per-seed difference is expressed, which direction is better)
+SETTING_METRICS = {
+    "mean_t": ("Δ mean completion time (%)", "pct", "lower"),
+    "finished": ("Δ peers finished (pp)", "pp", "higher"),
+    "fr_slowdown": ("Δ free-rider slowdown (×)", "ratio", "higher"),
+    "upload_rho": ("Δ upload–completion ρ", "rho", "lower"),
+}
+SETTING_UNITS = {"pct": "% of unchoke", "pp": "percentage points", "ratio": "ratio", "rho": "Spearman rho"}
+SHARED_STYLE = {"color": INK_3, "marker": "o"}
+GROUP_NAMES = {"shared": r"$\alpha$ = 0", "selection-only": r"Selection-only ($\alpha_s$)",
+               "allocation-only": r"Allocation-only ($\alpha_b$)", "combined": r"Combined ($\alpha_s = \alpha_b$)"}
+
+
+def setting_key(alpha_s, alpha_b):
+    return f"{alpha_s:g}:{alpha_b:g}"
+
+
+def hybrid_settings(runs):
+    """One row per hybrid setting in display order: alpha = 0, then each sweep by increasing alpha."""
+    hyb = runs[runs.policy.eq("hybrid")]
+    s = hyb[["sweep", "alpha", "alpha_s", "alpha_b"]].drop_duplicates(["alpha_s", "alpha_b"])
+    rank = {"shared": -1, **{name: i for i, name in enumerate(SWEEP_ORDER)}}
+    s = s.assign(rank=s.sweep.map(rank)).sort_values(["rank", "alpha"]).reset_index(drop=True)
+    s["key"] = [setting_key(a, b) for a, b in zip(s.alpha_s, s.alpha_b)]
+    names = {"selection-only": r"selection $\alpha_s$", "allocation-only": r"allocation $\alpha_b$",
+             "combined": r"combined $\alpha$"}
+    s["label"] = [r"$\alpha$ = 0" if sw == "shared" else f"{names.get(sw, sw)} = {a:g}"
+                  for sw, a in zip(s.sweep, s.alpha)]
+    return s
+
+
+def setting_differences(runs):
+    """Per (setting, condition, seed) difference between each hybrid setting and unchoke on the same seed."""
+    ref = runs[runs.policy.eq("unchoke")].set_index(["condition", "seed"])[list(SETTING_METRICS)]
+    hyb = runs[runs.policy.eq("hybrid")]
+    hyb = hyb.assign(key=[setting_key(a, b) for a, b in zip(hyb.alpha_s, hyb.alpha_b)])
+    hyb = hyb.join(ref, on=["condition", "seed"], rsuffix="_ref")
+    out = hyb[["key", "condition", "seed"]].copy()
+    for m, (_, kind, _) in SETTING_METRICS.items():
+        a, b = hyb[m], hyb[f"{m}_ref"]
+        out[m] = (a - b) / b * 100 if kind == "pct" else (a - b) * 100 if kind == "pp" else a - b
+    return out
+
+
+def setting_tests(diffs):
+    """Wilcoxon signed-rank test of each setting against unchoke in each condition, Holm-corrected
+    within each metric across every setting and condition."""
+    rows = []
+    for (key, cond), g in diffs.groupby(["key", "condition"]):
+        for m in SETTING_METRICS:
+            d = g[m].dropna()
+            n = len(d)
+            p = stats.wilcoxon(d).pvalue if n >= 2 and np.any(d != 0) else (np.nan if n < 2 else 1.0)
+            ci = stats.t.ppf(0.975, n - 1) * d.std(ddof=1) / np.sqrt(n) if n > 1 else np.nan
+            rows.append({"key": key, "condition": cond, "metric": m, "n_seeds": n,
+                         "mean_diff": d.mean() if n else np.nan, "ci95": ci, "wilcoxon_p": p})
+    tests = pd.DataFrame(rows)
+    tests["p_holm"] = np.nan
+    for _, idx in tests.groupby("metric").groups.items():
+        tests.loc[idx, "p_holm"] = holm(tests.loc[idx, "wilcoxon_p"])
+    return tests
+
+
+def setting_overall(diffs):
+    """Each setting's difference from unchoke averaged over conditions. Averaging within a seed first
+    keeps the pairing, so the CI is across the seeds. Metrics that only exist in some conditions
+    (free-rider slowdown, upload rho) average over the conditions where they are defined."""
+    rows = []
+    for key, g in diffs.groupby("key"):
+        for m in SETTING_METRICS:
+            per_seed = g.groupby("seed")[m].mean().dropna()
+            n = len(per_seed)
+            rows.append({"key": key, "metric": m, "n_seeds": n, "mean_diff": per_seed.mean(),
+                         "ci95": stats.t.ppf(0.975, n - 1) * per_seed.std(ddof=1) / np.sqrt(n) if n > 1 else np.nan})
+    return pd.DataFrame(rows)
+
+
+def fig_settings_heatmap(tests, settings, order):
+    t = tests[tests.metric.eq("mean_t")]
+    table = t.pivot(index="condition", columns="key", values="mean_diff")
+    sig = t.pivot(index="condition", columns="key", values="p_holm").lt(0.05)
+    idx = [c for c in order.condition if c in table.index]
+    cols = [k for k in settings.key if k in table.columns]
+    values = table.loc[idx, cols].to_numpy(dtype=float)
+    sig = sig.loc[idx, cols].to_numpy()
+    lim = max(np.nanmax(np.abs(values)) if np.isfinite(values).any() else 1, 1e-9)
+    labels = order.set_index("condition").condition_label
+
+    fig, ax = plt.subplots(figsize=(3.6 + 0.66 * len(cols), 0.32 * len(idx) + 2.4), layout="constrained")
+    im = ax.imshow(values, cmap=DIVERGING, aspect="auto", norm=TwoSlopeNorm(vcenter=0, vmin=-lim, vmax=lim))
+    for (r, c), v in np.ndenumerate(values):
+        if np.isfinite(v):
+            ax.text(c, r, f"{v:+.1f}" + ("*" if sig[r, c] else ""), ha="center", va="center", fontsize=7.5,
+                    fontweight="bold" if sig[r, c] else "normal",
+                    color=INK if abs(v) < 0.6 * lim else SURFACE)
+    by_key = settings.set_index("key")
+    ax.set_xticks(range(len(cols)), [f"{by_key.alpha[k]:g}" for k in cols])
+    ax.set_yticks(range(len(idx)), [labels[c] for c in idx])
+    ax.xaxis.tick_top()
+    ax.grid(False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    # Group headers above the alpha ticks, and surface-coloured gaps between the sweep families.
+    sweeps = [by_key.sweep[k] for k in cols]
+    start = 0
+    for i in range(1, len(cols) + 1):
+        if i == len(cols) or sweeps[i] != sweeps[start]:
+            ax.text((start + i - 1) / 2, -1.25, GROUP_NAMES.get(sweeps[start], sweeps[start]),
+                    ha="center", va="bottom", fontsize=8.5, color=INK, fontweight="semibold")
+            if i < len(cols):
+                ax.axvline(i - 0.5, color=SURFACE, lw=3)
+            start = i
+    cbar = fig.colorbar(im, ax=ax, shrink=0.5, pad=0.01)
+    cbar.set_ticks([-lim, 0, lim], labels=["faster", "same", "slower"])
+    cbar.outline.set_visible(False)
+    fig.suptitle("Every hybrid setting relative to unchoke reciprocity: Δ mean completion time (%)\n"
+                 "Mean of per-seed paired differences; bold* = significant after Holm correction "
+                 "(Wilcoxon, p < 0.05)", x=0.01, ha="left")
+    return fig
+
+
+def fig_settings_summary(overall, settings, highlight, prop_reference):
+    metrics = [m for m in SETTING_METRICS if overall[overall.metric.eq(m)].mean_diff.notna().any()]
+    keys = list(settings.key)
+    by_key = settings.set_index("key")
+    fig, axes = plt.subplots(1, len(metrics), sharey=True, squeeze=False,
+                             figsize=(2.9 * len(metrics) + 2.2, 0.36 * len(keys) + 1.9), layout="constrained")
+    y = np.arange(len(keys))
+    for ax, m in zip(axes[0], metrics):
+        d = overall[overall.metric.eq(m)].set_index("key").reindex(keys)
+        ax.axvline(0, color=INK_3, lw=0.9, zorder=1)
+        for yi, k in zip(y, keys):
+            st = SWEEP_STYLES.get(by_key.sweep[k], SHARED_STYLE)
+            ax.errorbar(d.mean_diff[k], yi, xerr=d.ci95[k], fmt=st["marker"], color=st["color"], ms=6,
+                        elinewidth=1.4, capsize=0, markeredgecolor=SURFACE, markeredgewidth=0.8, zorder=3)
+        label, _, better = SETTING_METRICS[m]
+        ax.set_title(label, loc="left")
+        ax.set_xlabel("better →" if better == "higher" else "← better", color=INK_2)
+        ax.grid(axis="y", visible=False)
+        for boundary in np.flatnonzero(by_key.sweep[keys].to_numpy()[1:] != by_key.sweep[keys].to_numpy()[:-1]):
+            ax.axhline(boundary + 0.5, color=GRID, lw=0.8)
+    ax0 = axes[0][0]
+    ax0.set_yticks(y, list(by_key.label[keys]))
+    ax0.invert_yaxis()
+    for tick, k in zip(ax0.get_yticklabels(), keys):
+        if k == highlight:
+            tick.set_fontweight("bold")
+    note = f"; propshare averages {prop_reference:+.1f}% completion time on the same scale" \
+        if prop_reference is not None and np.isfinite(prop_reference) else ""
+    fig.suptitle("Hybrid settings against unchoke reciprocity (0 line), averaged over all conditions\n"
+                 f"95% CIs across seeds; bold label = setting used in figures 01–06 and 08{note}",
+                 x=0.01, ha="left")
     return fig
 
 
@@ -449,6 +664,33 @@ def write_tables(cmp, models, order, out, hybrid_name):
     print(f"  {out / 'paired_tests.csv'}")
 
 
+def write_setting_tables(tests, overall, settings, order, out):
+    """Every hybrid setting against unchoke: per condition (with tests) and averaged over conditions."""
+    cols = settings[["key", "sweep", "alpha_s", "alpha_b"]]
+    units = {m: SETTING_UNITS[kind] for m, (_, kind, _) in SETTING_METRICS.items()}
+    better = {m: b for m, (_, _, b) in SETTING_METRICS.items()}
+
+    per_cond = cols.merge(tests, on="key").merge(order[["condition", "condition_label"]], on="condition")
+    per_cond.insert(per_cond.columns.get_loc("metric") + 1, "unit", per_cond.metric.map(units))
+    per_cond.insert(per_cond.columns.get_loc("unit") + 1, "better", per_cond.metric.map(better))
+    per_cond["significant"] = per_cond.p_holm.lt(0.05)
+    per_cond.drop(columns="key").to_csv(out / "hybrid_settings_tests.csv", index=False, float_format="%.5g")
+    print(f"  {out / 'hybrid_settings_tests.csv'}")
+
+    sig_counts = per_cond[per_cond.significant].assign(
+        improved=lambda d: np.where(d.better.eq("lower"), d.mean_diff < 0, d.mean_diff > 0))
+    counts = sig_counts.groupby(["key", "metric"]).improved.agg(
+        sig_better="sum", sig_worse=lambda x: int((~x).sum())).reset_index()
+    summary = cols.merge(overall, on="key").merge(counts, on=["key", "metric"], how="left")
+    summary[["sig_better", "sig_worse"]] = summary[["sig_better", "sig_worse"]].fillna(0).astype(int)
+    summary["conditions_tested"] = summary.metric.map(
+        per_cond.dropna(subset=["mean_diff"]).groupby("metric").condition.nunique())
+    summary.insert(summary.columns.get_loc("metric") + 1, "unit", summary.metric.map(units))
+    summary.insert(summary.columns.get_loc("unit") + 1, "better", summary.metric.map(better))
+    summary.drop(columns="key").to_csv(out / "hybrid_settings_summary.csv", index=False, float_format="%.5g")
+    print(f"  {out / 'hybrid_settings_summary.csv'}")
+
+
 # --------------------------------------------------------------------------- main
 
 def parse_alpha(text):
@@ -490,7 +732,30 @@ def main():
         ("06_upload_vs_completion", lambda: fig_scatter(peers, cmp, models, deadline, hybrid_name)),
         ("07_hybrid_alpha_sweep", lambda: fig_hybrid_sweep(runs, order, models)),
         ("08_relative_to_unchoke", lambda: fig_heatmap(cmp, models, order, hybrid_name)),
+        ("09_hybrid_sweep_all_conditions", lambda: fig_hybrid_sweep_grid(runs, order, models)),
     ]
+
+    # Every hybrid setting against unchoke (needs both in the batch).
+    has_settings = runs.policy.eq("hybrid").any() and runs.policy.eq("unchoke").any()
+    if has_settings:
+        settings = hybrid_settings(runs)
+        diffs = setting_differences(runs)
+        tests = setting_tests(diffs)
+        overall = setting_overall(diffs)
+        prop_reference = None
+        if runs.policy.eq("prop").any():
+            ref = runs[runs.policy.eq("unchoke")].set_index(["condition", "seed"]).mean_t
+            prop = runs[runs.policy.eq("prop")].set_index(["condition", "seed"]).mean_t
+            prop_reference = ((prop - ref) / ref * 100).groupby("seed").mean().mean()
+        highlight = setting_key(*args.hybrid)
+        figures += [
+            ("10_hybrid_settings_vs_unchoke", lambda: fig_settings_heatmap(tests, settings, order)),
+            ("11_hybrid_settings_summary",
+             lambda: fig_settings_summary(overall, settings, highlight, prop_reference)),
+        ]
+    else:
+        print("  skipped 10_hybrid_settings_vs_unchoke, 11_hybrid_settings_summary (need hybrid and unchoke runs)")
+
     for name, build in figures:
         fig = build()
         if fig is None:
@@ -498,6 +763,8 @@ def main():
         else:
             save(fig, out, name, args.format)
     write_tables(cmp, models, order, out, hybrid_name)
+    if has_settings:
+        write_setting_tables(tests, overall, settings, order, out)
 
 
 if __name__ == "__main__":
