@@ -604,6 +604,41 @@ tbody tr:hover {
   background: #f2f5f7;
 }
 
+.sort-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: inherit;
+  text-transform: inherit;
+}
+
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 9px 17px;
+  border-top: 1px solid #d9dfe3;
+  color: #5b636a;
+  font-size: 10px;
+}
+
+.table-pagination button {
+  padding: 4px 8px;
+  border: 1px solid #b9c1c8;
+  background: #fff;
+  color: #454d53;
+}
+
+.table-pagination button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .note {
   margin-top: 15px;
   padding: 8px 11px;

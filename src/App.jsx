@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { STRATEGY_COLOURS, STRATEGY_NAMES, exportExperiment } from './simulator.js';
+import { adaptExperiment, adaptSweep } from './results/resultAdapters.js';
+import ResultsTable from './results/ResultsTable.jsx';
 
 const formatNumber = (value, digits = 2) => Number(value).toFixed(digits);
-const formatFinishTime = (seconds) => seconds === null ? '—' : `${formatNumber(seconds, 1)} s`;
 
 function ChartPanel({ experiment, results, chartType, title, description }) {
   const chartWidth = 600;
@@ -144,6 +145,7 @@ function App() {
   const [allReciprocityLevels, setAllReciprocityLevels] = useState(false);
   const [experiment, setExperiment] = useState(null);
   const [sweepResult, setSweepResult] = useState(null);
+  const [resultVersion, setResultVersion] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const worker = useRef(null);
   const importInput = useRef(null);
@@ -169,6 +171,7 @@ function App() {
     nextWorker.onmessage = ({ data }) => {
       if (allReciprocityLevels) setSweepResult(data.result);
       else setExperiment(data.result);
+      setResultVersion((version) => version + 1);
       nextWorker.terminate();
       worker.current = null;
       setIsRunning(false);
@@ -210,6 +213,7 @@ function App() {
         seed: comparison.config.seed,
       });
       setExperiment(comparison);
+      setResultVersion((version) => version + 1);
     } catch {
       window.alert('Invalid JSON file');
     }
@@ -224,6 +228,8 @@ function App() {
     </div>
   );
   const results = experiment?.results ?? [];
+  const adapted = useMemo(() => sweepResult ? adaptSweep(sweepResult)
+    : experiment ? adaptExperiment(experiment) : null, [experiment, sweepResult]);
 
 
   return (
@@ -271,20 +277,7 @@ function App() {
             {experiment && <button className="small-button" onClick={() => download(experiment, 'comparison.json')}>Export comparison</button>}
           </div>
           </section>
-          <section className="panel table-panel">
-            <div className="table-head"><h3>Comparison results</h3><span>Times measured from the start of the run</span></div>
-            <div className="table-scroll"><table>
-              <thead><tr><th>Policy</th><th>Mean downloaded</th><th>Completed</th><th>First finish</th><th>Full swarm finish</th><th>Mean finish (completed only)</th><th>Stopped at</th></tr></thead>
-              <tbody>{results.map((r) => <tr key={r.strategy}>
-                <td>{STRATEGY_NAMES[r.strategy]}</td><td>{formatNumber(r.finalCompletion, 1)}%</td>
-                <td>{r.completed}/{r.peerCount} ({formatNumber(r.completionFraction * 100, 1)}%)</td>
-                <td>{formatFinishTime(r.firstFinishMinutes === null ? null : r.firstFinishMinutes * 60)}</td>
-                <td>{formatFinishTime(r.swarmFinishSeconds)}</td>
-                <td>{formatFinishTime(r.meanFinishMinutes === null ? null : r.meanFinishMinutes * 60)} ({r.finishedTimesCount})</td>
-                <td>{formatFinishTime(r.elapsedSeconds)} · {r.termination}</td>
-              </tr>)}</tbody>
-            </table></div>
-          </section>
+          {adapted && <ResultsTable key={resultVersion} rows={adapted.rows} mode={adapted.mode} />}
           <div className="chart-grid">
             <ChartPanel experiment={experiment} results={results} chartType="completion" title="Mean downloaded percentage" description="Average fraction of file data held by initial leechers." />
             <ChartPanel experiment={experiment} results={results} chartType="completed" title="Completed initial leechers" description="Peers holding the entire file; includes peers currently offline." />
