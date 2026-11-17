@@ -12,10 +12,14 @@ export default function SweepHeatmap({ rows, metric, onMetricChange, selectedId,
   const data = useMemo(() => [{
     type: 'heatmap',
     x: RECIPROCITY_LEVELS, y: RECIPROCITY_LEVELS,
+    xgap: 2, ygap: 2,
     z: cells.map((line) => line.map((cell) => cell.value)),
     customdata: cells.map((line) => line.map((cell) => cell.row
       ? [cell.row.completed, cell.row.peerCount, cell.row.termination] : [null, null, 'unavailable'])),
-    colorscale: 'RdYlGn', reversescale: metric === 'meanTime',
+    colorscale: metric === 'meanTime'
+      ? [[0, '#5b9f46'], [0.5, '#f1d47d'], [1, '#c24d43']]
+      : [[0, '#c24d43'], [0.5, '#f1d47d'], [1, '#5b9f46']],
+    reversescale: false,
     zmin: metric === 'completion' ? 0 : undefined,
     zmax: metric === 'completion' ? 100 : undefined,
     colorbar: { title: METRICS[metric].unit, thickness: 14 },

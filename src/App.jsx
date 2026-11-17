@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { exportExperiment } from './simulator.js';
 import { adaptExperiment, adaptSweep } from './results/resultAdapters.js';
-import ResultsTable from './results/ResultsTable.jsx';
 import ExperimentCharts from './results/ExperimentCharts.jsx';
 import SweepHeatmap from './results/SweepHeatmap.jsx';
 import SweepComparisonChart from './results/SweepComparisonChart.jsx';
@@ -144,7 +143,6 @@ function App() {
           {numberField('seed', 'Random seed', 0, 4294967295)}
           <button className="run-button" disabled={isRunning} onClick={run}>Run comparison</button>
           {isRunning && <><p role="status">Running simulation…</p><button onClick={cancel}>Cancel</button></>}
-          {sweepResult && !isRunning && <p role="status">Sweep complete: {sweepResult.repetitions[0].comparisons.length} comparisons.</p>}
         </aside>
         <main className="main">
           <section className="panel intro"><div>
@@ -160,8 +158,7 @@ function App() {
             {sweepResult && <button className="small-button" onClick={() => download(sweepResult, 'sweep.json')}>Export sweep</button>}
           </div>
           </section>
-          {adapted && <ResultsTable key={resultVersion} rows={adapted.rows} mode={adapted.mode} />}
-          {adapted?.mode === 'experiment' && <ExperimentCharts key={resultVersion} rows={adapted.rows} />}
+          {adapted?.mode === 'experiment' && <ExperimentCharts key={`experiment-${resultVersion}`} rows={adapted.rows} />}
           {adapted?.mode === 'sweep' && <SweepHeatmap rows={adapted.rows} metric={sweepMetric}
             onMetricChange={setSweepMetric} selectedId={selectedHybridId} onSelect={setSelectedHybridId} />}
           {adapted?.mode === 'sweep' && <SweepComparisonChart rows={adapted.rows} metric={sweepMetric} selectedId={selectedHybridId} />}
