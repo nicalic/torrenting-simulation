@@ -493,6 +493,28 @@ input[type="range"] {
   text-align: center;
 }
 
+.metric-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #454d53;
+  font-size: 11px;
+}
+
+.metric-selector select {
+  padding: 5px 7px;
+  border: 1px solid #b9c1c8;
+  background: #fff;
+  color: #24292e;
+}
+
+.selection-summary {
+  margin: 5px 0 0;
+  color: #454d53;
+  font-size: 11px;
+}
+
 .chart-head h3,
 .table-head h3 {
   margin: 0;
