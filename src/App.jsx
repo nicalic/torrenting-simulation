@@ -141,7 +141,9 @@ const isValidComparison = (data) => {
 
 function App() {
   const [settings, setSettings] = useState(initialSettings);
+  const [allReciprocityLevels, setAllReciprocityLevels] = useState(false);
   const [experiment, setExperiment] = useState(null);
+  const [sweepResult, setSweepResult] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
   const worker = useRef(null);
   const importInput = useRef(null);
@@ -159,17 +161,20 @@ function App() {
       freeRiderCount: Math.round(settings.peerCount * settings.freeRiderRatio),
     };
     worker.current?.terminate();
+    setSweepResult(null);
+    if (allReciprocityLevels) setExperiment(null);
     const nextWorker = new Worker(new URL('./simulation.worker.js', import.meta.url), { type: 'module' });
     worker.current = nextWorker;
     setIsRunning(true);
     nextWorker.onmessage = ({ data }) => {
-      setExperiment(data.result);
+      if (allReciprocityLevels) setSweepResult(data.result);
+      else setExperiment(data.result);
       nextWorker.terminate();
       worker.current = null;
       setIsRunning(false);
     };
     nextWorker.onerror = cancel;
-    nextWorker.postMessage({ config });
+    nextWorker.postMessage({ config, allReciprocityLevels });
   };
   const download = (value, filename) => {
     const url = URL.createObjectURL(new Blob([exportExperiment(value)], { type: 'application/json' }));
@@ -190,6 +195,8 @@ function App() {
       worker.current?.terminate();
       worker.current = null;
       setIsRunning(false);
+      setAllReciprocityLevels(false);
+      setSweepResult(null);
       setSettings({
         peerCount: comparison.config.peerCount,
         fileSizeMB: comparison.config.fileSizeMB,
@@ -241,12 +248,17 @@ function App() {
             {numberField('meanOfflineSeconds', 'Mean offline duration (s)', 0.1, 100000, 0.1)}
           </>}
           <h2 className="section-title">Policies</h2>
-          {numberField('alphaS', 'Hybrid selection reciprocity αₛ', 0, 1, 0.25)}
-          {numberField('alphaB', 'Hybrid allocation reciprocity αᵦ', 0, 1, 0.05)}
+          <div className="field"><label><input type="checkbox" checked={allReciprocityLevels}
+            onChange={(e) => setAllReciprocityLevels(e.target.checked)} /> All reciprocity levels</label></div>
+          {!allReciprocityLevels && <>
+            {numberField('alphaS', 'Hybrid selection reciprocity αₛ', 0, 1, 0.25)}
+            {numberField('alphaB', 'Hybrid allocation reciprocity αᵦ', 0, 1, 0.05)}
+          </>}
           <p className="hint">Hybrid uses four slots and δ = 2 Mbps. Proportional sharing serves all eligible receivers.</p>
           {numberField('seed', 'Random seed', 0, 4294967295)}
           <button className="run-button" disabled={isRunning} onClick={run}>Run comparison</button>
           {isRunning && <><p role="status">Running simulation…</p><button onClick={cancel}>Cancel</button></>}
+          {sweepResult && !isRunning && <p role="status">Sweep complete: {sweepResult.repetitions[0].comparisons.length} comparisons.</p>}
         </aside>
         <main className="main">
           <section className="panel intro"><div>
