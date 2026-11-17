@@ -5,6 +5,7 @@ import ResultsTable from './results/ResultsTable.jsx';
 import ExperimentCharts from './results/ExperimentCharts.jsx';
 import SweepHeatmap from './results/SweepHeatmap.jsx';
 import SweepComparisonChart from './results/SweepComparisonChart.jsx';
+import { isValidExperiment, isValidSweep } from './results/resultValidation.js';
 
 const initialSettings = {
   peerCount: 31, fileSizeMB: 128,
@@ -12,54 +13,6 @@ const initialSettings = {
   meanOnlineSeconds: 300, meanOfflineSeconds: 30,
   alphaS: 0.5, alphaB: 0.5,
   seed: 42,
-};
-
-const isValidComparison = (data) => {
-  const config = data?.config;
-  if (data?.schemaVersion !== 1 || !config || !data.network || !Array.isArray(data.results)) return false;
-  if (!Array.isArray(config.nodeConfigs) || !Array.isArray(data.network.peerIds)) return false;
-  if (config.nodeConfigs.length !== config.peerCount + 1) return false;
-  if (config.nodeConfigs.filter((node) => node.role === 'peer').length !== config.peerCount) return false;
-  if (config.nodeConfigs.filter((node) => node.role === 'seed').length !== 1) return false;
-  if (data.network.peerIds.length !== config.peerCount || !Number.isFinite(data.durationMinutes) || data.durationMinutes <= 0) return false;
-
-  const numbers = [
-    config.peerCount, config.fileSizeMB, config.heterogeneity, config.freeRiderRatio,
-    config.meanOnlineSeconds, config.meanOfflineSeconds, config.alphaS, config.alphaB, config.seed,
-  ];
-  if (!numbers.every(Number.isFinite)) return false;
-  if (!Number.isInteger(config.peerCount) || config.peerCount < 1 || config.peerCount > 59) return false;
-  if (!Number.isInteger(config.seed) || config.seed < 0 || config.seed > 4294967295) return false;
-  if (config.fileSizeMB <= 0 || config.fileSizeMB > 1024) return false;
-  if (config.heterogeneity < 0 || config.heterogeneity > 1 || config.freeRiderRatio < 0 || config.freeRiderRatio > 1) return false;
-  if (config.alphaS < 0 || config.alphaS > 1 || config.alphaB < 0 || config.alphaB > 1) return false;
-  if (config.meanOnlineSeconds <= 0 || config.meanOfflineSeconds <= 0 || typeof config.churnEnabled !== 'boolean') return false;
-  if (!Array.isArray(data.network.seedIds) || data.network.seedIds.length !== 1) return false;
-  if (!Array.isArray(data.network.freeRiderIds) || data.results.length !== 3) return false;
-  if (!Number.isInteger(config.freeRiderCount) || data.network.freeRiderIds.length !== config.freeRiderCount) return false;
-
-  return data.results.every((result) =>
-    ['hybrid', 'prop', 'unchoke'].includes(result.strategy) &&
-    Array.isArray(result.times) &&
-    Array.isArray(result.averageCompletion) &&
-    Array.isArray(result.completedPeers) &&
-    result.times.length > 0 &&
-    result.averageCompletion.length === result.times.length &&
-    result.completedPeers.length === result.times.length &&
-    result.times.every(Number.isFinite) &&
-    result.averageCompletion.every(Number.isFinite) &&
-    result.completedPeers.every(Number.isFinite) &&
-    result.peerCount === config.peerCount &&
-    Number.isFinite(result.finalCompletion) &&
-    Number.isFinite(result.completed) &&
-    Number.isFinite(result.completionFraction) &&
-    Number.isFinite(result.finishedTimesCount) &&
-    Number.isFinite(result.elapsedSeconds) &&
-    ['complete', 'deadline'].includes(result.termination) &&
-    (result.firstFinishMinutes === null || Number.isFinite(result.firstFinishMinutes)) &&
-    (result.swarmFinishSeconds === null || Number.isFinite(result.swarmFinishSeconds)) &&
-    (result.meanFinishMinutes === null || Number.isFinite(result.meanFinishMinutes)),
-  );
 };
 
 function App() {
@@ -117,28 +70,30 @@ function App() {
     if (!file) return;
 
     try {
-      const comparison = JSON.parse(await file.text());
-      if (!isValidComparison(comparison)) throw new Error();
+      const imported = JSON.parse(await file.text());
+      const isExperiment = isValidExperiment(imported);
+      const isSweep = !isExperiment && isValidSweep(imported);
+      if (!isExperiment && !isSweep) throw new Error();
 
       worker.current?.terminate();
       worker.current = null;
       setIsRunning(false);
-      setAllReciprocityLevels(false);
-      setSweepResult(null);
+      setAllReciprocityLevels(isSweep);
+      setSweepResult(isSweep ? imported : null);
       setSelectedHybridId(null);
       setSettings({
-        peerCount: comparison.config.peerCount,
-        fileSizeMB: comparison.config.fileSizeMB,
-        heterogeneity: comparison.config.heterogeneity,
-        freeRiderRatio: comparison.config.freeRiderRatio,
-        churnEnabled: comparison.config.churnEnabled,
-        meanOnlineSeconds: comparison.config.meanOnlineSeconds,
-        meanOfflineSeconds: comparison.config.meanOfflineSeconds,
-        alphaS: comparison.config.alphaS,
-        alphaB: comparison.config.alphaB,
-        seed: comparison.config.seed,
+        peerCount: imported.config.peerCount,
+        fileSizeMB: imported.config.fileSizeMB,
+        heterogeneity: imported.config.heterogeneity,
+        freeRiderRatio: imported.config.freeRiderRatio,
+        churnEnabled: imported.config.churnEnabled,
+        meanOnlineSeconds: imported.config.meanOnlineSeconds,
+        meanOfflineSeconds: imported.config.meanOfflineSeconds,
+        alphaS: imported.config.alphaS ?? initialSettings.alphaS,
+        alphaB: imported.config.alphaB ?? initialSettings.alphaB,
+        seed: imported.config.seed,
       });
-      setExperiment(comparison);
+      setExperiment(isExperiment ? imported : null);
       setResultVersion((version) => version + 1);
     } catch {
       window.alert('Invalid JSON file');
@@ -194,12 +149,15 @@ function App() {
         <main className="main">
           <section className="panel intro"><div>
             <h2>Swarm completion</h2>
-            <p>{experiment ? `${experiment.network.peerIds.length} leechers · ${experiment.network.freeRiderIds.length} free riders · seed ${experiment.seed}` : 'Set conditions and run a comparison.'}</p>
+            <p>{experiment ? `${experiment.network.peerIds.length} leechers · ${experiment.network.freeRiderIds.length} free riders · seed ${experiment.seed}`
+              : sweepResult ? `${sweepResult.config.peerCount} leechers · ${sweepResult.config.freeRiderCount} free riders · seed ${sweepResult.seeds[0]}`
+                : 'Set conditions and run a comparison.'}</p>
           </div>
           <div className="intro-actions">
             <input ref={importInput} type="file" accept=".json,application/json" hidden onChange={importComparison} />
             <button className="small-button" onClick={() => importInput.current.click()}>Import JSON</button>
             {experiment && <button className="small-button" onClick={() => download(experiment, 'comparison.json')}>Export comparison</button>}
+            {sweepResult && <button className="small-button" onClick={() => download(sweepResult, 'sweep.json')}>Export sweep</button>}
           </div>
           </section>
           {adapted && <ResultsTable key={resultVersion} rows={adapted.rows} mode={adapted.mode} />}
