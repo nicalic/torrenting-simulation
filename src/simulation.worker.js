@@ -1,4 +1,4 @@
-import { runExperiment, runSweeps } from './simulator.js';
+import { runExperiment, runSweeps } from "./simulator.js";
 
 self.onmessage = ({ data: { config, allReciprocityLevels } }) => {
   const result = allReciprocityLevels
