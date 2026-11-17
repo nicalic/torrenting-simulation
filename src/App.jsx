@@ -203,7 +203,7 @@ function App() {
           </div>
           </section>
           {adapted && <ResultsTable key={resultVersion} rows={adapted.rows} mode={adapted.mode} />}
-          {adapted?.mode === 'experiment' && <ExperimentCharts rows={adapted.rows} />}
+          {adapted?.mode === 'experiment' && <ExperimentCharts key={resultVersion} rows={adapted.rows} />}
           {adapted?.mode === 'sweep' && <SweepHeatmap rows={adapted.rows} metric={sweepMetric}
             onMetricChange={setSweepMetric} selectedId={selectedHybridId} onSelect={setSelectedHybridId} />}
           {adapted?.mode === 'sweep' && <SweepComparisonChart rows={adapted.rows} metric={sweepMetric} selectedId={selectedHybridId} />}

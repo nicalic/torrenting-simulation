@@ -476,6 +476,12 @@ input[type="range"] {
   gap: 13px;
 }
 
+.playback-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0;
+}
+
 .plot-figure {
   width: 100%;
   height: 330px;
