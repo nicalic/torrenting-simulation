@@ -476,6 +476,23 @@ input[type="range"] {
   gap: 13px;
 }
 
+.plot-figure {
+  width: 100%;
+  height: 330px;
+  margin-top: 8px;
+}
+
+.chart-summary,
+.empty-chart {
+  color: #687078;
+  font-size: 10px;
+}
+
+.empty-chart {
+  padding: 35px 12px;
+  text-align: center;
+}
+
 .chart-head h3,
 .table-head h3 {
   margin: 0;

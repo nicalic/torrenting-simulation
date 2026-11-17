@@ -1,88 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { STRATEGY_COLOURS, STRATEGY_NAMES, exportExperiment } from './simulator.js';
+import { exportExperiment } from './simulator.js';
 import { adaptExperiment, adaptSweep } from './results/resultAdapters.js';
 import ResultsTable from './results/ResultsTable.jsx';
-
-const formatNumber = (value, digits = 2) => Number(value).toFixed(digits);
-
-function ChartPanel({ experiment, results, chartType, title, description }) {
-  const chartWidth = 600;
-  const chartHeight = 280;
-  const leftMargin = 43;
-  const rightMargin = 12;
-  const topMargin = 12;
-  const bottomMargin = 32;
-  const plotWidth = chartWidth - leftMargin - rightMargin;
-  const plotHeight = chartHeight - topMargin - bottomMargin;
-  const durationMinutes = experiment ? experiment.durationMinutes : 0;
-  const axisTicks = [0, 0.25, 0.5, 0.75, 1];
-  const isCompletionChart = chartType === 'completion';
-  const downloaderCount = results.length > 0 ? results[0].peerCount : 1;
-  const maxValue = isCompletionChart ? 100 : Math.max(1, downloaderCount);
-  const timeDigits = durationMinutes < 10 ? 1 : 0;
-
-  return (
-    <section className="panel chart-panel">
-      <div className="chart-head">
-        <div>
-          <h3>{title}</h3>
-          <p>{description}</p>
-        </div>
-      </div>
-      <div className="legend">
-        {results.map((result) => (
-          <span className="legend-item" key={result.strategy}>
-            <i
-              className="legend-swatch"
-              style={{ background: STRATEGY_COLOURS[result.strategy] }}
-            />
-            {STRATEGY_NAMES[result.strategy]}
-          </span>
-        ))}
-      </div>
-      <div className="chart-wrap">
-        <svg
-          className="chart-svg"
-          viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-          preserveAspectRatio="none"
-          role="img"
-          aria-label={title}
-        >
-          {axisTicks.map((tick) => {
-            const x = leftMargin + plotWidth * tick;
-            const y = topMargin + plotHeight * tick;
-            const value = Math.round(maxValue * (1 - tick));
-            const label = isCompletionChart ? `${value}%` : value;
-            const minutes = durationMinutes * tick;
-
-            return (
-              <g key={tick}>
-                <line className="chart-grid-line" x1={leftMargin} y1={y} x2={chartWidth - rightMargin} y2={y} />
-                <text className="chart-axis-label" x={leftMargin - 8} y={y} textAnchor="end" dominantBaseline="middle">{label}</text>
-                <text className="chart-axis-label" x={x} y={chartHeight - bottomMargin + 15} textAnchor="middle" dominantBaseline="middle">{formatNumber(minutes, timeDigits)}m</text>
-              </g>
-            );
-          })}
-          {results.map((result) => {
-            const values = isCompletionChart
-              ? result.averageCompletion
-              : result.completedPeers;
-            const chartPoints = values.map((value, index) => {
-              const x = leftMargin + plotWidth * result.times[index] / durationMinutes;
-              const y = topMargin + plotHeight - (value / maxValue) * plotHeight;
-              return `${x},${y}`;
-            }).join(' ');
-
-            return (
-              <polyline key={result.strategy} fill="none" stroke={STRATEGY_COLOURS[result.strategy]} strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" points={chartPoints} />
-            );
-          })}
-          <text className="chart-x-label" x={leftMargin + plotWidth / 2} y={chartHeight - 5} textAnchor="middle">Elapsed time</text>
-        </svg>
-      </div>
-    </section>
-  );
-}
+import ExperimentCharts from './results/ExperimentCharts.jsx';
 
 const initialSettings = {
   peerCount: 31, fileSizeMB: 128,
@@ -227,7 +147,6 @@ function App() {
         onChange={(e) => update(key, Number(e.target.value))} />
     </div>
   );
-  const results = experiment?.results ?? [];
   const adapted = useMemo(() => sweepResult ? adaptSweep(sweepResult)
     : experiment ? adaptExperiment(experiment) : null, [experiment, sweepResult]);
 
@@ -278,10 +197,7 @@ function App() {
           </div>
           </section>
           {adapted && <ResultsTable key={resultVersion} rows={adapted.rows} mode={adapted.mode} />}
-          <div className="chart-grid">
-            <ChartPanel experiment={experiment} results={results} chartType="completion" title="Mean downloaded percentage" description="Average fraction of file data held by initial leechers." />
-            <ChartPanel experiment={experiment} results={results} chartType="completed" title="Completed initial leechers" description="Peers holding the entire file; includes peers currently offline." />
-          </div>
+          {adapted?.mode === 'experiment' && <ExperimentCharts rows={adapted.rows} />}
           <div className="note"><strong>Model assumptions.</strong> Complete graph; one permanent initial seeder at 20 Mbps.
             Leecher upload capacities are sampled once from 20 × U(1−h, 1+h) Mbps; download caps are 100 Mbps.
             Free riders never upload, including after completion. All peers start online; exponential churn preserves data.
