@@ -4,6 +4,7 @@ import { adaptExperiment, adaptSweep } from './results/resultAdapters.js';
 import ResultsTable from './results/ResultsTable.jsx';
 import ExperimentCharts from './results/ExperimentCharts.jsx';
 import SweepHeatmap from './results/SweepHeatmap.jsx';
+import SweepComparisonChart from './results/SweepComparisonChart.jsx';
 
 const initialSettings = {
   peerCount: 31, fileSizeMB: 128,
@@ -205,6 +206,7 @@ function App() {
           {adapted?.mode === 'experiment' && <ExperimentCharts rows={adapted.rows} />}
           {adapted?.mode === 'sweep' && <SweepHeatmap rows={adapted.rows} metric={sweepMetric}
             onMetricChange={setSweepMetric} selectedId={selectedHybridId} onSelect={setSelectedHybridId} />}
+          {adapted?.mode === 'sweep' && <SweepComparisonChart rows={adapted.rows} metric={sweepMetric} selectedId={selectedHybridId} />}
           <div className="note"><strong>Model assumptions.</strong> Complete graph; one permanent initial seeder at 20 Mbps.
             Leecher upload capacities are sampled once from 20 × U(1−h, 1+h) Mbps; download caps are 100 Mbps.
             Free riders never upload, including after completion. All peers start online; exponential churn preserves data.

@@ -11,7 +11,7 @@ export default function PlotFigure({ data, layout, className = '', onClick }) {
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       font: { family: 'Arial, Helvetica, sans-serif', size: 11, color: '#5b636a' },
-      margin: { l: 56, r: 18, t: 15, b: 56 },
+      margin: layout.margin ?? { l: 56, r: 18, t: 15, b: 56 },
     }, { responsive: true, displaylogo: false }).then(() => {
       if (onClick) element.on('plotly_click', onClick);
     });
