@@ -1,5 +1,11 @@
 export const summarizeRun = ({
-  strategy, network, finishTimes, piecesByPeer, times, averageCompletion, completedPeers,
+  strategy,
+  network,
+  finishTimes,
+  piecesByPeer,
+  times,
+  averageCompletion,
+  completedPeers,
 }) => {
   const peerCount = network.peerIds.length;
   const finishedTimes = [];
@@ -37,15 +43,24 @@ export const summarizeRun = ({
     finalCompletion: averageCompletion[averageCompletion.length - 1],
     completed: completedPeers[completedPeers.length - 1],
     meanFinishMinutes:
-      finishedTimes.length === 0 ? null : totalFinishTime / finishedTimes.length,
+      finishedTimes.length === 0
+        ? null
+        : totalFinishTime / finishedTimes.length,
     finishedTimesCount: finishedTimes.length,
-    completionTimesSeconds: network.peerIds.map((id) => finishTimes[id] === null ? null : finishTimes[id] * 60),
+    completionTimesSeconds: network.peerIds.map((id) =>
+      finishTimes[id] === null ? null : finishTimes[id] * 60,
+    ),
     completionFraction: finishedTimes.length / peerCount,
-    swarmFinishSeconds: lastFinishMinutes === null ? null : lastFinishMinutes * 60,
-    meanAllPeersFinishSeconds: finishedTimes.length === peerCount ? totalFinishTime * 60 / peerCount : null,
+    swarmFinishSeconds:
+      lastFinishMinutes === null ? null : lastFinishMinutes * 60,
+    meanAllPeersFinishSeconds:
+      finishedTimes.length === peerCount
+        ? (totalFinishTime * 60) / peerCount
+        : null,
     elapsedSeconds: times.at(-1) * 60,
-    termination: finishedTimes.length === peerCount ? 'complete' : 'deadline',
-    downloadedMB: network.peerIds.map((id) => piecesByPeer[id].reduce((sum, mb) => sum + mb, 0)),
+    termination: finishedTimes.length === peerCount ? "complete" : "deadline",
+    downloadedMB: network.peerIds.map((id) =>
+      piecesByPeer[id].reduce((sum, mb) => sum + mb, 0),
+    ),
   };
 };
-

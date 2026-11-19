@@ -24,13 +24,12 @@ file, replacing it if it already exists.
 The input contains:
 
 - `config`: swarm conditions, file size, timing, churn, and unchoking slot counts.
-- `seeds`: random seeds for independent repetitions.
+- `seed`: random seed for the sweep.
 - `alphas`: reciprocity values to test, chosen from `0`, `0.25`, `0.5`, `0.75`, `1`.
 
-Each seed runs both reference policies and three hybrid families: selection-only
-`(α, 0)`, allocation-only `(0, α)`, and combined `(α, α)`. Shared hybrid settings
-run once per seed and their results are reused across families. With all five
-alpha values, this gives 15 unique simulations and 17 comparison rows per seed.
+The seed runs both reference policies and every combination of selection and
+allocation alpha values. With all five alpha values, this gives 25 hybrid runs
+and 27 comparison rows. The reference and hybrid runs share sampled inputs.
 
 The example uses one seeder and five initial leechers, a 4 MB file, and a 60-second
 limit. Adjust timing and unchoking slots through `timeLimitSeconds`, `stepSeconds`,

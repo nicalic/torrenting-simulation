@@ -1,10 +1,16 @@
-import { BITS_PER_BYTE } from './constants.js';
-import { createRandomStreams } from './random.js';
-import { createUploadProposals } from './policies.js';
-import { transferPieces } from './transfers.js';
-import { summarizeRun } from './measurements.js';
+import { BITS_PER_BYTE } from "./constants.js";
+import { createRandomStreams } from "./random.js";
+import { createUploadProposals } from "./policies.js";
+import { transferPieces } from "./transfers.js";
+import { summarizeRun } from "./measurements.js";
 
-export const simulateStrategy = (strategy, network, numberOfSteps, settings, seed) => {
+export const simulateStrategy = (
+  strategy,
+  network,
+  numberOfSteps,
+  settings,
+  seed,
+) => {
   const nodeCount = network.uploadMbps.length;
   const peerCount = network.peerIds.length;
   const random = createRandomStreams(seed).policy;
@@ -29,7 +35,9 @@ export const simulateStrategy = (strategy, network, numberOfSteps, settings, see
   const online = Array(nodeCount).fill(true);
   const churnCursors = Array(nodeCount).fill(0);
   const finishTimes = Array(nodeCount).fill(null);
-  const contributionTotals = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
+  const contributionTotals = Array.from({ length: nodeCount }, () =>
+    Array(nodeCount).fill(0),
+  );
   let contributionRates = contributionTotals.map((row) => row.slice());
   const history = Array(settings.contributionSteps);
   const selections = Array.from({ length: nodeCount }, () => []);
@@ -49,20 +57,44 @@ export const simulateStrategy = (strategy, network, numberOfSteps, settings, see
     // Policy scores use only completed previous steps, never transfers from this step.
     if ((step - 1) % settings.selectionSteps === 0) {
       contributionRates = contributionTotals.map((row) =>
-        row.map((mb) => mb * BITS_PER_BYTE / (settings.contributionSteps * stepSeconds)));
+        row.map(
+          (mb) =>
+            (mb * BITS_PER_BYTE) / (settings.contributionSteps * stepSeconds),
+        ),
+      );
     }
     const proposals = createUploadProposals({
-      strategy, network, settings, step, online, piecesByPeer, pieceSizesMB,
-      contributionRates, finishTimes, selections, random,
+      strategy,
+      network,
+      settings,
+      step,
+      online,
+      piecesByPeer,
+      pieceSizesMB,
+      contributionRates,
+      finishTimes,
+      selections,
+      random,
     });
     const { nextPieces, transfers } = transferPieces({
-      proposals, network, stepSeconds, piecesByPeer, pieceSizesMB, ongoing, reservations, random,
+      proposals,
+      network,
+      stepSeconds,
+      piecesByPeer,
+      pieceSizesMB,
+      ongoing,
+      reservations,
+      random,
     });
 
     piecesByPeer = nextPieces;
     settings.onStep?.({
-      strategy, step, online: online.slice(), transfers,
-      piecesByPeer, pieceSizesMB,
+      strategy,
+      step,
+      online: online.slice(),
+      transfers,
+      piecesByPeer,
+      pieceSizesMB,
       reservations: reservations.map((entries) => Array.from(entries)),
       selections: selections.map((ids) => ids.slice()),
       contributionRates,
@@ -94,17 +126,19 @@ export const simulateStrategy = (strategy, network, numberOfSteps, settings, see
     }
 
     times.push((step * stepSeconds) / 60);
-    averageCompletion.push(
-      (totalCompletion / peerCount) * 100,
-    );
+    averageCompletion.push((totalCompletion / peerCount) * 100);
     completedPeers.push(completedCount);
     // Replace the oldest window entry after measuring and transferring this step.
     const historyIndex = (step - 1) % settings.contributionSteps;
     const expired = history[historyIndex];
     for (let sender = 0; sender < nodeCount; sender += 1) {
       for (let receiver = 0; receiver < nodeCount; receiver += 1) {
-        contributionTotals[sender][receiver] = Math.max(0,
-          contributionTotals[sender][receiver] + transfers[sender][receiver] - (expired?.[sender][receiver] ?? 0));
+        contributionTotals[sender][receiver] = Math.max(
+          0,
+          contributionTotals[sender][receiver] +
+            transfers[sender][receiver] -
+            (expired?.[sender][receiver] ?? 0),
+        );
       }
     }
     history[historyIndex] = transfers;
@@ -112,6 +146,12 @@ export const simulateStrategy = (strategy, network, numberOfSteps, settings, see
   }
 
   return summarizeRun({
-    strategy, network, finishTimes, piecesByPeer, times, averageCompletion, completedPeers,
+    strategy,
+    network,
+    finishTimes,
+    piecesByPeer,
+    times,
+    averageCompletion,
+    completedPeers,
   });
 };

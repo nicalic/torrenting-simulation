@@ -1,18 +1,31 @@
-import { BITS_PER_BYTE } from './constants.js';
+import { BITS_PER_BYTE } from "./constants.js";
 
 export const limitDownloads = (proposals, capacitiesMB) => {
   const incoming = capacitiesMB.map(() => 0);
-  for (const transfer of proposals) incoming[transfer.receiver] += transfer.budgetMB;
+  for (const transfer of proposals)
+    incoming[transfer.receiver] += transfer.budgetMB;
   return proposals.map((transfer) => ({
     ...transfer,
-    budgetMB: transfer.budgetMB * Math.min(1, capacitiesMB[transfer.receiver] / (incoming[transfer.receiver] || 1)),
+    budgetMB:
+      transfer.budgetMB *
+      Math.min(
+        1,
+        capacitiesMB[transfer.receiver] / (incoming[transfer.receiver] || 1),
+      ),
   }));
 };
 
 // Read sender ownership from the start-of-step snapshot. Apply received bytes to a copy.
 // Ongoing reservations survive steps and are released when their connection disappears.
 export const transferPieces = ({
-  proposals, network, stepSeconds, piecesByPeer, pieceSizesMB, ongoing, reservations, random,
+  proposals,
+  network,
+  stepSeconds,
+  piecesByPeer,
+  pieceSizesMB,
+  ongoing,
+  reservations,
+  random,
 }) => {
   const nodeCount = network.uploadMbps.length;
   for (let index = proposals.length - 1; index > 0; index -= 1) {
@@ -46,7 +59,11 @@ export const transferPieces = ({
   }
 
   const limited = limitDownloads(proposals, downloadLeft);
-  const active = new Set(limited.filter((t) => t.budgetMB > 0).map((t) => t.sender + ':' + t.receiver));
+  const active = new Set(
+    limited
+      .filter((t) => t.budgetMB > 0)
+      .map((t) => t.sender + ":" + t.receiver),
+  );
   for (const [key, transfer] of ongoing) {
     if (!active.has(key)) {
       reservations[transfer.receiver].delete(transfer.piece);
@@ -54,11 +71,8 @@ export const transferPieces = ({
     }
   }
   for (const transfer of limited) {
-    const key = transfer.sender + ':' + transfer.receiver;
-    let budgetMB = Math.min(
-      transfer.budgetMB,
-      downloadLeft[transfer.receiver],
-    );
+    const key = transfer.sender + ":" + transfer.receiver;
+    let budgetMB = Math.min(transfer.budgetMB, downloadLeft[transfer.receiver]);
 
     while (budgetMB > 0) {
       let rarestFrequency = Infinity;
@@ -70,7 +84,12 @@ export const transferPieces = ({
         const receiverHasPiece =
           nextPieces[transfer.receiver][piece] === pieceSizesMB[piece];
         const owner = reservations[transfer.receiver].get(piece);
-        if (!senderHasPiece || receiverHasPiece || (owner !== undefined && owner !== transfer.sender)) continue;
+        if (
+          !senderHasPiece ||
+          receiverHasPiece ||
+          (owner !== undefined && owner !== transfer.sender)
+        )
+          continue;
 
         if (pieceCounts[piece] < rarestFrequency) {
           rarestFrequency = pieceCounts[piece];
@@ -108,8 +127,7 @@ export const transferPieces = ({
 
       budgetMB -= sentMB;
       downloadLeft[transfer.receiver] -= sentMB;
-      transfers[transfer.sender][transfer.receiver] +=
-        sentMB;
+      transfers[transfer.sender][transfer.receiver] += sentMB;
     }
   }
 

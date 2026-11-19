@@ -33,11 +33,7 @@
     "regularSlots": 3,
     "optimisticSlots": 1
   },
-  "seeds": [
-    42,
-    43,
-    44
-  ],
+  "seed": 42,
   "alphas": [
     0,
     0.25,

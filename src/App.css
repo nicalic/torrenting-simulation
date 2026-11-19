@@ -18,8 +18,7 @@ body {
 .strategy-row span,
 .intro p,
 .run-meta,
-.chart-head p,
-.table-head span {
+.chart-head p {
   color: #687078;
 }
 
@@ -472,12 +471,68 @@ input[type="range"] {
 
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 13px;
 }
 
-.chart-head h3,
-.table-head h3 {
+.experiment-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.experiment-chart-head .small-button {
+  flex: none;
+}
+
+.plot-figure {
+  width: 100%;
+  height: 330px;
+  margin-top: 8px;
+}
+
+.plot-figure.completed-area-figure {
+  height: 480px;
+}
+
+.chart-summary,
+.empty-chart {
+  color: #687078;
+  font-size: 10px;
+}
+
+.empty-chart {
+  display: grid;
+  min-height: 330px;
+  padding: 35px 12px;
+  place-items: center;
+  text-align: center;
+}
+
+.metric-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #454d53;
+  font-size: 11px;
+}
+
+.metric-selector select {
+  padding: 5px 7px;
+  border: 1px solid #b9c1c8;
+  background: #fff;
+  color: #24292e;
+}
+
+.selection-summary {
+  margin: 5px 0 0;
+  color: #454d53;
+  font-size: 11px;
+}
+
+.chart-head h3 {
   margin: 0;
   font-size: 17px;
   font-weight: 500;
@@ -488,120 +543,6 @@ input[type="range"] {
 .chart-head p {
   margin: 3px 0 0;
   font-size: 10px;
-}
-
-.legend {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #5a6269;
-  font-size: 9px;
-  line-height: normal;
-  white-space: nowrap;
-}
-
-.legend-swatch {
-  width: 10px;
-  height: 3px;
-}
-
-.chart-wrap {
-  width: 100%;
-  height: 280px;
-  margin-top: 7px;
-}
-
-.chart-svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.chart-grid-line {
-  stroke: #e3e8ec;
-  stroke-width: 1;
-}
-
-.chart-axis-label {
-  fill: #75828a;
-  font-size: 10px;
-  line-height: normal;
-}
-
-.chart-x-label {
-  fill: #68737a;
-  font-size: 10px;
-  line-height: normal;
-}
-
-.table-panel {
-  overflow: hidden;
-}
-
-.table-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 17px 10px;
-}
-
-.table-head span {
-  font-size: 9px;
-  line-height: normal;
-}
-
-.table-scroll {
-  max-height: 340px;
-  overflow: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-
-thead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #e9edf0;
-  color: #5b636a;
-  font-size: 9px;
-  line-height: normal;
-  letter-spacing: 0.04em;
-  text-align: right;
-  text-transform: uppercase;
-}
-
-th,
-td {
-  padding: 9px 12px;
-  border-top: 1px solid #d9dfe3;
-  font-size: 10px;
-  text-align: right;
-  white-space: nowrap;
-}
-
-th:first-child,
-td:first-child {
-  padding-left: 17px;
-  text-align: left;
-}
-
-tbody tr:hover {
-  background: #f2f5f7;
 }
 
 .note {
@@ -625,9 +566,6 @@ tbody tr:hover {
     grid-template-columns: 300px minmax(0, 1fr);
   }
 
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 780px) {
@@ -639,8 +577,12 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .chart-wrap {
-    height: 260px;
+  .plot-figure {
+    height: 300px;
+  }
+
+  .plot-figure.completed-area-figure {
+    height: 420px;
   }
 }
 
