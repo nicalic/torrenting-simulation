@@ -12,7 +12,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "plotly.js-dist-min": "^4.3.0",
+    "plotly.js-cartesian-dist-min": "^4.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
