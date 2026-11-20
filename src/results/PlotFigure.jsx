@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import Plotly from "plotly.js-dist-min";
+import Plotly from "plotly.js-cartesian-dist-min";
 
 const PlotFigure = forwardRef(function PlotFigure(
   { data, layout, className = "", onClick },

@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { exportExperiment } from "./simulator.js";
 import { adaptExperiment, adaptSweep } from "./results/resultAdapters.js";
-import ExperimentCharts from "./results/ExperimentCharts.jsx";
-import SweepHeatmap from "./results/SweepHeatmap.jsx";
-import SweepComparisonChart from "./results/SweepComparisonChart.jsx";
 import { isValidExperiment, isValidSweep } from "./results/resultValidation.js";
+
+const ExperimentCharts = lazy(() => import("./results/ExperimentCharts.jsx"));
+const SweepHeatmap = lazy(() => import("./results/SweepHeatmap.jsx"));
+const SweepComparisonChart = lazy(
+  () => import("./results/SweepComparisonChart.jsx"),
+);
 
 const initialSettings = {
   peerCount: 31,
@@ -284,28 +287,30 @@ function App() {
               )}
             </div>
           </section>
-          {adapted?.mode === "experiment" && (
-            <ExperimentCharts
-              key={`experiment-${resultVersion}`}
-              rows={adapted.rows}
-            />
-          )}
-          {adapted?.mode === "sweep" && (
-            <SweepHeatmap
-              rows={adapted.rows}
-              metric={sweepMetric}
-              onMetricChange={setSweepMetric}
-              selectedId={selectedHybridId}
-              onSelect={setSelectedHybridId}
-            />
-          )}
-          {adapted?.mode === "sweep" && (
-            <SweepComparisonChart
-              rows={adapted.rows}
-              metric={sweepMetric}
-              selectedId={selectedHybridId}
-            />
-          )}
+          <Suspense fallback={<p role="status">Loading charts…</p>}>
+            {adapted?.mode === "experiment" && (
+              <ExperimentCharts
+                key={`experiment-${resultVersion}`}
+                rows={adapted.rows}
+              />
+            )}
+            {adapted?.mode === "sweep" && (
+              <SweepHeatmap
+                rows={adapted.rows}
+                metric={sweepMetric}
+                onMetricChange={setSweepMetric}
+                selectedId={selectedHybridId}
+                onSelect={setSelectedHybridId}
+              />
+            )}
+            {adapted?.mode === "sweep" && (
+              <SweepComparisonChart
+                rows={adapted.rows}
+                metric={sweepMetric}
+                selectedId={selectedHybridId}
+              />
+            )}
+          </Suspense>
           <div className="note">
             <strong>Model assumptions.</strong> Complete graph; one permanent
             initial seeder at 20 Mbps. Leecher upload capacities are sampled
