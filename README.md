@@ -36,3 +36,23 @@ limit. Adjust timing and unchoking slots through `timeLimitSeconds`, `stepSecond
 `selectionIntervalSeconds`, `contributionWindowSeconds`, `regularSlots`, and
 `optimisticSlots` in `config`. Timing intervals must be positive integer multiples
 of the simulation step. Inputs are assumed to satisfy the simulation contract.
+
+## Run a batch study
+
+From the repository root, run:
+
+```sh
+node scripts/run-batch.js --out results/batch
+```
+
+The runner uses `scripts/config.json` by default. To choose a configuration or limit parallel workers:
+
+```sh
+node scripts/run-batch.js --config scripts/config.json --out results/batch --workers 4
+```
+
+`--out` is required. The default worker count is half the available parallelism, rounded down. Use a new output directory for each batch: the runner refuses to replace an existing `metadata.json`.
+
+The default configuration tests 24 swarm conditions across 30 seeds. For each condition and seed, it runs two reference policies and all 25 combinations of hybrid selection and bandwidth weights, for 19,440 runs total. Policies within a condition and seed share the same sampled inputs.
+
+The output directory contains `runs.csv` (run settings and summary metrics), `peers.csv` (peer inputs and completion times), and `metadata.json` (the study design, run counts, and completion status). A successful batch sets `complete` to `true` in `metadata.json`.
